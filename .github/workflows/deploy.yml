@@ -1,0 +1,102 @@
+name: Deploy to AWS Elastic Beanstalk
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  TF_CLOUD: false
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  APP_NAME: asgardeo-webapp-demo
+  ENV_NAME: asgardeo-webapp-demo-env
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init -input=false
+
+      - name: Terraform Fmt (non-blocking)
+        working-directory: ./terraform
+        run: terraform fmt -recursive || true
+
+      - name: Terraform Plan
+        working-directory: ./terraform
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Terraform Apply (POC auto-approve)
+        working-directory: ./terraform
+        run: terraform apply -input=false -auto-approve tfplan
+
+      - name: Read Terraform outputs
+        id: tf_outputs
+        working-directory: ./terraform
+        shell: bash
+        run: |
+          echo "bucket=$(terraform output -raw artifacts_bucket_name)" >> $GITHUB_OUTPUT
+          echo "url=$(terraform output -raw beanstalk_environment_url)" >> $GITHUB_OUTPUT
+
+      - name: Package application
+        run: |
+          zip -r app.zip webapp
+          ls -lh app.zip
+
+      - name: Upload bundle to S3
+        env:
+          BUCKET: ${{ steps.tf_outputs.outputs.bucket }}
+        run: |
+          KEY="app-${GITHUB_SHA}.zip"
+          echo "Using S3://${BUCKET}/${KEY}"
+          aws s3 cp app.zip s3://$BUCKET/$KEY --region $AWS_REGION
+          echo "key=$KEY" >> $GITHUB_ENV
+
+      - name: Create application version
+        env:
+          BUCKET: ${{ steps.tf_outputs.outputs.bucket }}
+        run: |
+          LABEL="v-${GITHUB_SHA::7}"
+          aws elasticbeanstalk create-application-version \
+            --application-name "$APP_NAME" \
+            --version-label "$LABEL" \
+            --source-bundle S3Bucket=$BUCKET,S3Key=${key} \
+            --auto-create-application
+          echo "label=$LABEL" >> $GITHUB_ENV
+
+      - name: Deploy to environment
+        run: |
+          aws elasticbeanstalk update-environment \
+            --environment-name "$ENV_NAME" \
+            --version-label "$label"
+
+      - name: Output environment URL
+        run: |
+          echo "Environment URL: ${{ steps.tf_outputs.outputs.url }}"
+
+      - name: Health check
+        run: |
+          URL="${{ steps.tf_outputs.outputs.url }}"
+          echo "Checking $URL ..."
+          for i in {1..20}; do
+            if curl -fsS "$URL" > /dev/null; then
+              echo "Health check passed"; exit 0; fi
+            sleep 10; done
+          echo "Health check failed"; curl -i "$URL" || true; exit 1

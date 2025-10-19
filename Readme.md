@@ -4,7 +4,7 @@
 A CI/CD pipeline to automatically deploy a web application to AWS Elastic Beanstalk. This is a demo/POC environment focused on simplicity over production readiness.
 
 ## Architecture Overview
-- **Source**: GitHub repository (provided by partner team)
+- **Source of webapp**: A GitHub repository provided by partner team.
 - **Infrastructure as Code**: Terraform
 - **Deployment Target**: AWS Elastic Beanstalk (single instance)
 - **Application Type**: Static HTML web application (no database required)
