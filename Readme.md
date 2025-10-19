@@ -148,3 +148,55 @@ A CI/CD pipeline to automatically deploy a web application to AWS Elastic Beanst
 
 ## Sample Application
 Include a minimal `index.html` for initial testing:
+
+
+## Deployment Test Harness
+
+Two ways to test that Terraform can deploy the sample web app into your AWS account:
+
+### Option A: Local test script (recommended for quick validation)
+Prerequisites:
+- Terraform installed
+- AWS credentials in your environment (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION)
+- Optional: jq installed
+
+Steps:
+1. Run the test script:
+   - Default (deploy, wait for 200 OK, then destroy):
+     - bash scripts/test_deploy.sh
+   - Keep resources for inspection (remember to destroy later):
+     - SKIP_DESTROY=1 bash scripts/test_deploy.sh
+   - Customize variables (examples):
+     - TF_VAR_project_name=myproj TF_VAR_environment=dev bash scripts/test_deploy.sh
+2. The script will:
+   - terraform init/plan/apply in the terraform/ folder
+   - fetch the Beanstalk environment URL from outputs
+   - poll the URL until HTTP 200 (up to ~15 minutes)
+   - destroy resources by default to avoid charges
+
+Environment toggles:
+- SKIP_DESTROY=1 to keep resources
+- MAX_WAIT_SECONDS and SLEEP_SECONDS to tune health-check wait
+- TF_VAR_* to set Terraform variables (e.g., TF_VAR_aws_region)
+
+### Option B: GitHub Actions (manual trigger)
+A workflow is provided to run the same test in CI using your AWS credentials and region.
+
+- Workflow: .github/workflows/test-deploy.yml
+- Triggers: workflow_dispatch (manual)
+- Required GitHub Secrets:
+  - AWS_ACCESS_KEY_ID
+  - AWS_SECRET_ACCESS_KEY
+  - (Optional) AWS_REGION if not provided as an input
+
+How to run:
+1. Push this repository to GitHub and configure the secrets above.
+2. In the Actions tab, run "Test Terraform Deploy".
+3. Inputs:
+   - aws_region: defaults to us-east-1
+   - skip_destroy: default false (will destroy after test)
+4. The job will provision, wait for HTTP 200, and destroy by default.
+
+Notes on costs and cleanup:
+- The test script/workflow destroys by default. If you skip destroy, ensure you run scripts/destroy.sh or terraform destroy in terraform/ afterward to avoid charges.
+- S3 artifact buckets with versioning may retain versions; empty and delete as needed.

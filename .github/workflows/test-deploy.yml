@@ -1,0 +1,75 @@
+name: Test Terraform Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_destroy:
+        description: 'Skip terraform destroy after test (true/false)'
+        required: false
+        default: 'false'
+      aws_region:
+        description: 'AWS region to deploy to'
+        required: false
+        default: 'us-east-1'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  test-deploy:
+    name: Run test_deploy.sh
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ github.event.inputs.aws_region || secrets.AWS_REGION || 'us-east-1' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5
+
+      - name: Install dependencies (jq, curl)
+        run: sudo apt-get update && sudo apt-get install -y jq curl
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform fmt (non-blocking)
+        run: terraform -chdir=terraform fmt -check || true
+
+      - name: Terraform init
+        run: terraform -chdir=terraform init -input=false
+
+      - name: Terraform validate
+        run: terraform -chdir=terraform validate
+
+      - name: Run test_deploy.sh
+        env:
+          SKIP_DESTROY: ${{ github.event.inputs.skip_destroy == 'true' && '1' || '0' }}
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
+        run: bash scripts/test_deploy.sh
+
+      - name: Print Terraform outputs
+        if: always()
+        run: |
+          set -e
+          echo "Outputs:" || true
+          terraform -chdir=terraform output || true
+
+      - name: Upload workflow logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-deploy-logs
+          path: |
+            terraform/.terraform
+            terraform/terraform.tfstate*
+            **/*.log
+          if-no-files-found: ignore
