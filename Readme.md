@@ -67,7 +67,7 @@ A CI/CD pipeline to automatically deploy a web application to AWS Elastic Beanst
 - **Requirements**:
   - Environment name: "asgardeo-webapp-demo-env"
   - Solution stack: Use latest supported platform for web application
-    - For Node.js: "64bit Amazon Linux 2023 v6.x.x running Node.js 18"
+    - For Node.js: "64bit Amazon Linux 2023 v6.x.x running Node.js 22"
   - Instance type: t3.micro (free tier eligible)
   - Single instance deployment (no load balancer for simplicity)
   - Configuration settings:

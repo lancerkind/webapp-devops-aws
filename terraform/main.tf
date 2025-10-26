@@ -211,7 +211,7 @@ resource "aws_elastic_beanstalk_application_version" "asgardeo_app_version" {
 resource "aws_elastic_beanstalk_environment" "asgardeo_environment" {
   name                = "asgardeo-webapp-demo-env"
   application         = aws_elastic_beanstalk_application.asgardeo_application.name
-  solution_stack_name = "64bit Amazon Linux 2023 v6.1.1 running Node.js 18"
+  solution_stack_name = "64bit Amazon Linux 2023 v6.6.6 running Node.js 22"
   version_label       = aws_elastic_beanstalk_application_version.asgardeo_app_version.name
 
   # Environment configuration
