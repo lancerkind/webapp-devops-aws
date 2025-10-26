@@ -21,6 +21,30 @@ locals {
   name_prefix          = "asgardeo"
 }
 
+# Notes on Terraform syntax:
+#resource "<resource_type>" "<local_name>" {
+#  <configuration arguments>
+#}
+#### Breaking It Down
+#1. **`resource`** - The keyword that tells Terraform "I'm declaring a resource"
+#2. **`"<resource_type>"`** - What **kind** of AWS resource (from the provider)
+#    - Examples: , , `aws_vpc``aws_s3_bucket``aws_iam_role`
+#    - This is defined by the AWS provider
+#
+#3. **`"<local_name>"`** - **Your** name for this specific instance
+#    - This is how you reference it elsewhere in your code
+#    - You choose this name (like a variable name)
+#
+#4. **`{ ... }`** - The **configuration** for this resource
+#    - Not "work to perform" but rather "properties to set"
+#    - These are the **arguments** that define how the resource should be created
+# The statements inside `{ }` are **declarative**, not imperative:
+#- ❌ Not: "Do this work"
+#- ✅ Instead: "I want a resource with these properties"
+#
+#Terraform figures out the work needed to make reality match your declaration.
+
+
 # VPC
 resource "aws_vpc" "asgardeo_vpc" {
   cidr_block           = "10.0.0.0/16"
@@ -99,6 +123,9 @@ resource "aws_iam_role" "beanstalk_ec2_role" {
   })
 }
 
+# This EC2 profile will need a policy setup permissions to write logs and other AWS paperwork for running the application,
+# and we'll want it to be able to access the s3 bucket
+# to copy the wep app package.
 resource "aws_iam_instance_profile" "beanstalk_ec2_profile" {
   name = "${local.name_prefix}-beanstalk-ec2-profile"
   role = aws_iam_role.beanstalk_ec2_role.name
@@ -134,18 +161,13 @@ resource "aws_iam_role_policy_attachment" "service_enhanced_health" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkEnhancedHealth"
 }
 
-resource "aws_iam_role_policy_attachment" "service_managed_updates" {
-  role       = aws_iam_role.beanstalk_service_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkManagedUpdatesCustomerRolePolicy"
-}
-
 # S3 bucket for application bundles
 resource "random_id" "bucket_suffix" {
   byte_length = 4
 }
 
 locals {
-  artifacts_bucket_name = lower(replace("${local.name_prefix}-${var.project_name}-${var.environment}-artifacts-${local.effective_account_id}-${var.aws_region}-${random_id.bucket_suffix.hex}", " ", "-"))
+  artifacts_bucket_name = lower(replace("${local.name_prefix}-artifacts-${local.effective_account_id}-${random_id.bucket_suffix.hex}", " ", "-"))
 }
 
 resource "aws_s3_bucket" "artifacts" {
@@ -168,11 +190,29 @@ resource "aws_elastic_beanstalk_application" "asgardeo_application" {
   tags = local.tags
 }
 
+# Upload webapp bundle to S3
+resource "aws_s3_object" "webapp_bundle" {
+  bucket = aws_s3_bucket.artifacts.id
+  key    = "webapp-${timestamp()}.zip"
+  source = "${path.module}/../webapp.zip"  # You'll need to create this
+  etag   = filemd5("${path.module}/../webapp.zip")
+}
+
+# Application Version
+resource "aws_elastic_beanstalk_application_version" "asgardeo_app_version" {
+  name        = "v${replace(timestamp(), "/[^0-9]/", "")}"
+  application = aws_elastic_beanstalk_application.asgardeo_application.name
+  description = "Initial version"
+  bucket      = aws_s3_bucket.artifacts.id
+  key         = aws_s3_object.webapp_bundle.key
+}
+
 # Elastic Beanstalk Environment
 resource "aws_elastic_beanstalk_environment" "asgardeo_environment" {
   name                = "asgardeo-webapp-demo-env"
   application         = aws_elastic_beanstalk_application.asgardeo_application.name
   solution_stack_name = "64bit Amazon Linux 2023 v6.1.1 running Node.js 18"
+  version_label       = aws_elastic_beanstalk_application_version.asgardeo_app_version.name
 
   # Environment configuration
   setting {
