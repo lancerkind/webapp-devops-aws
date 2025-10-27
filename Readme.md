@@ -146,27 +146,34 @@ A CI/CD pipeline to automatically deploy a web application to AWS Elastic Beanst
 - Ensure all AWS resources are removed to avoid charges
 - S3 bucket with application versions may need manual cleanup
 
-## Sample Application
-Include a minimal `index.html` for initial testing:
+### Note about web app package
+This setup requires .zip file containing a NodeJS application:
+- no parent directory 
+- package.json with a "start" script
+DON'T PUT FILES INTO A SUBDIRECTORY OF THE ROOT DIRECTORY or Elastic Beanstalk will not find the start script.
 
+## Test Sample Application
+Include a minimal NodeJS and an "index.html` for initial testing:
 
-## Deployment Test Harness
+### Deployment Test Harness
+Three ways to test that Terraform can deploy the sample web app into your AWS account.
 
-Three ways to test that Terraform can deploy the sample web app into your AWS account:
-
-### Option A-1: test Terraform works independant of Git
+#### Option A-1: test Terraform works independant of Git
 Prerequisites:
 - Terraform installed
 - AWS credentials in your environment (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION)
 
 Steps:
-1. zip files in webapp directory and put in parent directory: zip -r webapp.zip webapp/
+1. zip files in webapp directory and put in parent directory (don't put web app files into a subdirectory or elastic beanstalk won't start the app): 
+   2. (get rid of old webapp.zip if there is one) rm webapp.zip 
+   3. cd webapp /
+   3. zip -r ../webapp.zip *
 2. cd to terraform directory
 3. terraform init/plan/apply
 4. go to the url displayed in the terraform output to see app working
 5. terraform destroy
 
-### Option A: Local test script (recommended for quick validation)
+#### Option A: Local test script (recommended for quick validation)
 Prerequisites:
 - Terraform installed
 - AWS credentials in your environment (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION)
@@ -191,7 +198,7 @@ Environment toggles:
 - MAX_WAIT_SECONDS and SLEEP_SECONDS to tune health-check wait
 - TF_VAR_* to set Terraform variables (e.g., TF_VAR_aws_region)
 
-### Option B: GitHub Actions (manual trigger)
+#### Option B: GitHub Actions (manual trigger)
 A workflow is provided to run the same test in CI using your AWS credentials and region.
 
 - Workflow: .github/workflows/test-deploy.yml
