@@ -152,7 +152,19 @@ Include a minimal `index.html` for initial testing:
 
 ## Deployment Test Harness
 
-Two ways to test that Terraform can deploy the sample web app into your AWS account:
+Three ways to test that Terraform can deploy the sample web app into your AWS account:
+
+### Option A-1: test Terraform works independant of Git
+Prerequisites:
+- Terraform installed
+- AWS credentials in your environment (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION)
+
+Steps:
+1. zip files in webapp directory and put in parent directory: zip -r webapp.zip webapp/
+2. cd to terraform directory
+3. terraform init/plan/apply
+4. go to the url displayed in the terraform output to see app working
+5. terraform destroy
 
 ### Option A: Local test script (recommended for quick validation)
 Prerequisites:
