@@ -1,0 +1,80 @@
+2025-10-20T08:38:15.844-0500 [INFO]  Terraform version: 1.11.2
+2025-10-20T08:38:15.844-0500 [DEBUG] using github.com/hashicorp/go-tfe v1.70.0
+2025-10-20T08:38:15.844-0500 [DEBUG] using github.com/hashicorp/hcl/v2 v2.23.0
+2025-10-20T08:38:15.844-0500 [DEBUG] using github.com/hashicorp/terraform-svchost v0.1.1
+2025-10-20T08:38:15.844-0500 [DEBUG] using github.com/zclconf/go-cty v1.16.0
+2025-10-20T08:38:15.844-0500 [INFO]  Go runtime version: go1.23.3
+2025-10-20T08:38:15.844-0500 [INFO]  CLI args: []string{"terraform", "plan"}
+2025-10-20T08:38:15.844-0500 [DEBUG] Attempting to open CLI config file: /Users/lancer/.terraformrc
+2025-10-20T08:38:15.844-0500 [DEBUG] File doesn't exist, but doesn't need to. Ignoring.
+2025-10-20T08:38:15.844-0500 [DEBUG] ignoring non-existing provider search directory terraform.d/plugins
+2025-10-20T08:38:15.844-0500 [DEBUG] ignoring non-existing provider search directory /Users/lancer/.terraform.d/plugins
+2025-10-20T08:38:15.844-0500 [DEBUG] ignoring non-existing provider search directory /Users/lancer/Library/Application Support/io.terraform/plugins
+2025-10-20T08:38:15.844-0500 [DEBUG] ignoring non-existing provider search directory /Library/Application Support/io.terraform/plugins
+2025-10-20T08:38:15.849-0500 [INFO]  CLI command args: []string{"plan"}
+2025-10-20T08:38:18.984-0500 [DEBUG] checking for provisioner in "."
+2025-10-20T08:38:18.986-0500 [DEBUG] checking for provisioner in "/usr/local/bin"
+2025-10-20T08:38:18.998-0500 [INFO]  backend/local: starting Plan operation
+2025-10-20T08:38:19.028-0500 [DEBUG] created provider logger: level=debug
+2025-10-20T08:38:19.028-0500 [INFO]  provider: configuring client automatic mTLS
+2025-10-20T08:38:19.057-0500 [DEBUG] provider: starting plugin: path=.terraform/providers/registry.terraform.io/hashicorp/aws/6.17.0/darwin_amd64/terraform-provider-aws_v6.17.0_x5 args=[".terraform/providers/registry.terraform.io/hashicorp/aws/6.17.0/darwin_amd64/terraform-provider-aws_v6.17.0_x5"]
+2025-10-20T08:38:19.065-0500 [DEBUG] provider: plugin started: path=.terraform/providers/registry.terraform.io/hashicorp/aws/6.17.0/darwin_amd64/terraform-provider-aws_v6.17.0_x5 pid=85355
+2025-10-20T08:38:19.065-0500 [DEBUG] provider: waiting for RPC address: plugin=.terraform/providers/registry.terraform.io/hashicorp/aws/6.17.0/darwin_amd64/terraform-provider-aws_v6.17.0_x5
+2025-10-20T08:38:19.202-0500 [DEBUG] provider.terraform-provider-aws_v6.17.0_x5: assertion failed [arm_interval().contains(address)]: code fragment does not contain the given arm address
+2025-10-20T08:38:19.202-0500 [DEBUG] provider.terraform-provider-aws_v6.17.0_x5: (CodeFragmentMetadata.cpp:53 instruction_extents_for_arm_address)
+2025-10-20T08:39:19.068-0500 [DEBUG] created provider logger: level=debug
+2025-10-20T08:39:19.068-0500 [INFO]  provider: configuring client automatic mTLS
+2025-10-20T08:39:19.072-0500 [DEBUG] provider.terraform-provider-aws_v6.17.0_x5:  
+2025-10-20T08:39:19.073-0500 [DEBUG] provider: starting plugin: path=.terraform/providers/registry.terraform.io/hashicorp/random/3.7.2/darwin_amd64/terraform-provider-random_v3.7.2_x5 args=[".terraform/providers/registry.terraform.io/hashicorp/random/3.7.2/darwin_amd64/terraform-provider-random_v3.7.2_x5"]
+2025-10-20T08:39:19.073-0500 [ERROR] provider: plugin process exited: plugin=.terraform/providers/registry.terraform.io/hashicorp/aws/6.17.0/darwin_amd64/terraform-provider-aws_v6.17.0_x5 id=85355 error="signal: killed"
+2025-10-20T08:39:19.079-0500 [DEBUG] provider: plugin started: path=.terraform/providers/registry.terraform.io/hashicorp/random/3.7.2/darwin_amd64/terraform-provider-random_v3.7.2_x5 pid=85376
+2025-10-20T08:39:19.079-0500 [DEBUG] provider: waiting for RPC address: plugin=.terraform/providers/registry.terraform.io/hashicorp/random/3.7.2/darwin_amd64/terraform-provider-random_v3.7.2_x5
+2025-10-20T08:39:19.112-0500 [INFO]  provider.terraform-provider-random_v3.7.2_x5: configuring server automatic mTLS: timestamp=2025-10-20T08:39:19.111-0500
+2025-10-20T08:39:19.142-0500 [DEBUG] provider.terraform-provider-random_v3.7.2_x5: plugin address: address=/var/folders/6b/xt6fh1hn53l1t158m36myy8r0000gp/T/plugin79284915 network=unix timestamp=2025-10-20T08:39:19.142-0500
+2025-10-20T08:39:19.142-0500 [DEBUG] provider: using plugin: version=5
+2025-10-20T08:39:19.199-0500 [DEBUG] No provider meta schema returned
+2025-10-20T08:39:19.211-0500 [DEBUG] provider.stdio: received EOF, stopping recv loop: err="rpc error: code = Unavailable desc = error reading from server: EOF"
+2025-10-20T08:39:19.214-0500 [INFO]  provider: plugin process exited: plugin=.terraform/providers/registry.terraform.io/hashicorp/random/3.7.2/darwin_amd64/terraform-provider-random_v3.7.2_x5 id=85376
+2025-10-20T08:39:19.214-0500 [DEBUG] provider: plugin exited
+2025-10-20T08:39:19.216-0500 [WARN]  provider: plugin failed to exit gracefully
+2025-10-20T08:42:38.203-0500 [INFO]  Terraform version: 1.11.2
+2025-10-20T08:42:38.203-0500 [DEBUG] using github.com/hashicorp/go-tfe v1.70.0
+2025-10-20T08:42:38.203-0500 [DEBUG] using github.com/hashicorp/hcl/v2 v2.23.0
+2025-10-20T08:42:38.203-0500 [DEBUG] using github.com/hashicorp/terraform-svchost v0.1.1
+2025-10-20T08:42:38.203-0500 [DEBUG] using github.com/zclconf/go-cty v1.16.0
+2025-10-20T08:42:38.203-0500 [INFO]  Go runtime version: go1.23.3
+2025-10-20T08:42:38.203-0500 [INFO]  CLI args: []string{"terraform", "init"}
+2025-10-20T08:42:38.203-0500 [DEBUG] Attempting to open CLI config file: /Users/lancer/.terraformrc
+2025-10-20T08:42:38.203-0500 [DEBUG] File doesn't exist, but doesn't need to. Ignoring.
+2025-10-20T08:42:38.203-0500 [DEBUG] ignoring non-existing provider search directory terraform.d/plugins
+2025-10-20T08:42:38.203-0500 [DEBUG] ignoring non-existing provider search directory /Users/lancer/.terraform.d/plugins
+2025-10-20T08:42:38.203-0500 [DEBUG] ignoring non-existing provider search directory /Users/lancer/Library/Application Support/io.terraform/plugins
+2025-10-20T08:42:38.203-0500 [DEBUG] ignoring non-existing provider search directory /Library/Application Support/io.terraform/plugins
+2025-10-20T08:42:38.207-0500 [INFO]  CLI command args: []string{"init"}
+2025-10-20T08:42:38.214-0500 [DEBUG] checking for provisioner in "."
+2025-10-20T08:42:38.215-0500 [DEBUG] checking for provisioner in "/usr/local/bin"
+2025-10-20T08:42:38.217-0500 [DEBUG] Service discovery for registry.terraform.io at https://registry.terraform.io/.well-known/terraform.json
+2025-10-20T08:42:38.427-0500 [DEBUG] GET https://registry.terraform.io/v1/providers/hashicorp/aws/versions
+2025-10-20T08:42:38.554-0500 [DEBUG] GET https://registry.terraform.io/v1/providers/hashicorp/random/versions
+2025-10-20T08:42:38.665-0500 [DEBUG] GET https://registry.terraform.io/v1/providers/hashicorp/aws/6.17.0/download/darwin/amd64
+2025-10-20T08:42:38.785-0500 [DEBUG] GET https://releases.hashicorp.com/terraform-provider-aws/6.17.0/terraform-provider-aws_6.17.0_SHA256SUMS
+2025-10-20T08:42:38.974-0500 [DEBUG] GET https://releases.hashicorp.com/terraform-provider-aws/6.17.0/terraform-provider-aws_6.17.0_SHA256SUMS.72D7468F.sig
+2025-10-20T08:42:41.560-0500 [DEBUG] Provider signed by 34365D9472D7468F HashiCorp Security (hashicorp.com/security) <security@hashicorp.com>
+2025-10-20T08:42:53.629-0500 [DEBUG] GET https://registry.terraform.io/v1/providers/hashicorp/random/3.7.2/download/darwin/amd64
+2025-10-20T08:42:53.740-0500 [DEBUG] GET https://releases.hashicorp.com/terraform-provider-random/3.7.2/terraform-provider-random_3.7.2_SHA256SUMS
+2025-10-20T08:42:53.864-0500 [DEBUG] GET https://releases.hashicorp.com/terraform-provider-random/3.7.2/terraform-provider-random_3.7.2_SHA256SUMS.72D7468F.sig
+2025-10-20T08:42:54.407-0500 [DEBUG] Provider signed by 34365D9472D7468F HashiCorp Security (hashicorp.com/security) <security@hashicorp.com>
+2025-10-20T10:07:04.710-0500 [INFO]  Terraform version: 1.11.2
+2025-10-20T10:07:04.711-0500 [DEBUG] using github.com/hashicorp/go-tfe v1.70.0
+2025-10-20T10:07:04.711-0500 [DEBUG] using github.com/hashicorp/hcl/v2 v2.23.0
+2025-10-20T10:07:04.711-0500 [DEBUG] using github.com/hashicorp/terraform-svchost v0.1.1
+2025-10-20T10:07:04.711-0500 [DEBUG] using github.com/zclconf/go-cty v1.16.0
+2025-10-20T10:07:04.711-0500 [INFO]  Go runtime version: go1.23.3
+2025-10-20T10:07:04.711-0500 [INFO]  CLI args: []string{"terraform", "-version"}
+2025-10-20T10:07:04.711-0500 [DEBUG] Attempting to open CLI config file: /Users/lancer/.terraformrc
+2025-10-20T10:07:04.711-0500 [DEBUG] File doesn't exist, but doesn't need to. Ignoring.
+2025-10-20T10:07:04.711-0500 [DEBUG] ignoring non-existing provider search directory terraform.d/plugins
+2025-10-20T10:07:04.711-0500 [DEBUG] ignoring non-existing provider search directory /Users/lancer/.terraform.d/plugins
+2025-10-20T10:07:04.711-0500 [DEBUG] ignoring non-existing provider search directory /Users/lancer/Library/Application Support/io.terraform/plugins
+2025-10-20T10:07:04.712-0500 [DEBUG] ignoring non-existing provider search directory /Library/Application Support/io.terraform/plugins
+2025-10-20T10:07:04.715-0500 [INFO]  CLI command args: []string{"version", "-version"}
