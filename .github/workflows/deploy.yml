@@ -31,6 +31,13 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      # Build the artifact where Terraform expects it (repo root as webapp.zip)
+      - name: Package application for Terraform
+        run: |
+          rm -f webapp.zip
+          (cd webapp && zip -r ../webapp.zip .)
+          ls -lh webapp.zip
+
       - name: Terraform Init
         working-directory: ./terraform
         run: terraform init -input=false
@@ -41,9 +48,9 @@ jobs:
 
       - name: Terraform Plan
         working-directory: ./terraform
-        run: terraform plan -input=false -out=tfplan
+        run: terraform plan -input=false -out=tfplan -var "commit_sha=${GITHUB_SHA}"
 
-      - name: Terraform Apply (POC auto-approve)
+      - name: Terraform Apply (auto-approve)
         working-directory: ./terraform
         run: terraform apply -input=false -auto-approve tfplan
 
@@ -55,37 +62,7 @@ jobs:
           echo "bucket=$(terraform output -raw artifacts_bucket_name)" >> $GITHUB_OUTPUT
           echo "url=$(terraform output -raw beanstalk_environment_url)" >> $GITHUB_OUTPUT
 
-      - name: Package application
-        run: |
-          zip -r app.zip webapp
-          ls -lh app.zip
-
-      - name: Upload bundle to S3
-        env:
-          BUCKET: ${{ steps.tf_outputs.outputs.bucket }}
-        run: |
-          KEY="app-${GITHUB_SHA}.zip"
-          echo "Using S3://${BUCKET}/${KEY}"
-          aws s3 cp app.zip s3://$BUCKET/$KEY --region $AWS_REGION
-          echo "key=$KEY" >> $GITHUB_ENV
-
-      - name: Create application version
-        env:
-          BUCKET: ${{ steps.tf_outputs.outputs.bucket }}
-        run: |
-          LABEL="v-${GITHUB_SHA::7}"
-          aws elasticbeanstalk create-application-version \
-            --application-name "$APP_NAME" \
-            --version-label "$LABEL" \
-            --source-bundle S3Bucket=$BUCKET,S3Key=${key} \
-            --auto-create-application
-          echo "label=$LABEL" >> $GITHUB_ENV
-
-      - name: Deploy to environment
-        run: |
-          aws elasticbeanstalk update-environment \
-            --environment-name "$ENV_NAME" \
-            --version-label "$label"
+      # Removed AWS CLI deployment steps; Terraform handles versioning and environment update
 
       - name: Output environment URL
         run: |

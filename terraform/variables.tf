@@ -33,3 +33,9 @@ variable "aws_account_id" {
   type        = string
   default     = ""
 }
+
+
+variable "commit_sha" {
+  description = "Commit SHA used to version the application artifact and EB Application Version"
+  type        = string
+}

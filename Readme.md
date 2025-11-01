@@ -1,4 +1,4 @@
-# Continuous Delivery demo: Terraform + GitHub + AWS (Elastic Beanstalk)
+# Continuous Delivery with Terraform + GitHub + AWS (Elastic Beanstalk)
 
 ## Project Overview
 This repository demonstrates Continuous Delivery (CD) to AWS Elastic Beanstalk using Terraform for infrastructure and GitHub Actions for automation. It’s a simple demo/POC prioritized for clarity over production hardening.

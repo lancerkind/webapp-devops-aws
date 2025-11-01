@@ -193,16 +193,16 @@ resource "aws_elastic_beanstalk_application" "asgardeo_application" {
 # Upload webapp bundle to S3
 resource "aws_s3_object" "webapp_bundle" {
   bucket = aws_s3_bucket.artifacts.id
-  key    = "webapp-${timestamp()}.zip"
-  source = "${path.module}/../webapp.zip"  # You'll need to create this
+  key    = "webapp-${var.commit_sha}.zip"
+  source = "${path.module}/../webapp.zip"
   etag   = filemd5("${path.module}/../webapp.zip")
 }
 
 # Application Version
 resource "aws_elastic_beanstalk_application_version" "asgardeo_app_version" {
-  name        = "v${replace(timestamp(), "/[^0-9]/", "")}"
+  name        = "v-${var.commit_sha}"
   application = aws_elastic_beanstalk_application.asgardeo_application.name
-  description = "Initial version"
+  description = "Version for commit ${var.commit_sha}"
   bucket      = aws_s3_bucket.artifacts.id
   key         = aws_s3_object.webapp_bundle.key
 }
