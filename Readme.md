@@ -1,18 +1,40 @@
-# DevOps Pipeline to Deploy Webapp to AWS Elastic Beanstalk
+# Continuous Delivery demo: Terraform + GitHub + AWS (Elastic Beanstalk)
 
 ## Project Overview
-A CD pipeline to automatically deploy a web application to AWS Elastic Beanstalk. This is a demo/POC environment 
-focused on simplicity over production readiness. There are basically two major steps to doing this work:
-- step 1: how to use Terraform to provision infrastructure and deploy the sample web application
-- step 2: how to use GitHub Actions to trigger the pipeline
+This repository demonstrates Continuous Delivery (CD) to AWS Elastic Beanstalk using Terraform for infrastructure and GitHub Actions for automation. It’s a simple demo/POC prioritized for clarity over production hardening.
 
-You'll want to break this problem down so you can get step 1 working first, and then move on to step 2.
+We recommend completing the work in two clear steps:
+- Step 1: Get Terraform working with your AWS account (provision EB infrastructure and deploy the sample web app)
+- Step 2: Get CD working with GitHub (trigger deployments from GitHub Actions)
+
+Work through Step 1 first, verify it, then move on to Step 2.
 
 ## Architecture Overview
 - **Source of webapp**: A GitHub repository provided by partner team.
 - **Infrastructure as Code**: Terraform
 - **Deployment Target**: AWS Elastic Beanstalk (single instance)
 - **Application Type**: Static HTML web application (no database required)
+
+### Architecture Diagram
+
+```mermaid
+flowchart LR
+  subgraph GH["GitHub"]
+    A["Infrastructure repository\n(Terraform + Actions)"]
+    B["Webapp repository\n(Web application + Actions)"]
+  end
+
+  subgraph AWS["AWS Cloud"]
+    subgraph VPC["VPC"]
+      EB["Elastic Beanstalk"]
+    end
+  end
+
+  %% Relationships
+  B -- repository_dispatch / push --> A
+  A -- terraform apply / deploy --> EB
+  EB -- serves app --> U["User Browser"]
+```
 
 ## Simplifications (POC Only)
 - Single instance deployment (no auto-scaling)
@@ -28,8 +50,14 @@ You'll want to break this problem down so you can get step 1 working first, and 
 - **Compute**: AWS Elastic Beanstalk
 - **Version Control**: GitHub
 
-# Step 1 Terraform
+The result is to have an infrastructure GitHub repository orchestrates the deployment of a web application in a different 
+GitHub repository.  That's a little complicated so to make it easier, we'll break this down into smaller steps.
+
+# Step 1: Get Terraform working with your AWS account
 ## Terraform Infrastructure Components
+You'll need to install these dependencies to test using your local environment:
+- Terraform CLI
+- AWS CLI
 
 ### 1. VPC (Virtual Private Cloud)
 - **Resource Type**: `aws_vpc`
@@ -104,7 +132,7 @@ You'll want to break this problem down so you can get step 1 working first, and 
 - `availability_zones` auto-detect 2 AZs
 
 ## Outputs
-- `beanstalk_environment_url`: The URL of the deployed application
+- `beanstalk_environment_url`: The URL of the deployed application. This is the URL to visit to see if the application deployed.
 - `beanstalk_environment_id`: The environment ID
 - `vpc_id`: The VPC ID created
 - `application_version`: The deployed application version
@@ -116,11 +144,6 @@ You'll want to break this problem down so you can get step 1 working first, and 
 2. Access the Beanstalk URL in a browser
 3. Verify the homepage loads successfully
 4. Check AWS Console for resource creation
-
-### Automated Testing
-1. GitHub Actions workflow should complete without errors
-2. HTTP health check should return 200 status code
-3. Homepage content should be served
 
 ## Cleanup/Destroy
 - Provide script or documentation to run `terraform destroy`
@@ -136,10 +159,7 @@ This setup requires .zip file containing a NodeJS application:
 ## Test Sample Application
 Include a minimal NodeJS and an "index.html` for initial testing:
 
-### Deployment Test Harness
-Three ways to test that Terraform can deploy the sample web app into your AWS account.
-
-#### Option A-1: test Terraform works independant of Git
+## Test Terraform works independant of Git
 Prerequisites:
 - Terraform installed
 - AWS credentials in your environment (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION)
@@ -154,33 +174,8 @@ Steps:
 4. go to the url displayed in the terraform output to see app working
 5. terraform destroy
 
-#### Option A: Local test script (recommended for quick validation)
-Prerequisites:
-- Terraform installed
-- AWS credentials in your environment (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION)
-- Optional: jq installed
-
-Steps:
-1. Run the test script:
-    - Default (deploy, wait for 200 OK, then destroy):
-        - bash scripts/test_deploy.sh
-    - Keep resources for inspection (remember to destroy later):
-        - SKIP_DESTROY=1 bash scripts/test_deploy.sh
-    - Customize variables (examples):
-        - TF_VAR_project_name=myproj TF_VAR_environment=dev bash scripts/test_deploy.sh
-2. The script will:
-    - terraform init/plan/apply in the terraform/ folder
-    - fetch the Beanstalk environment URL from outputs
-    - poll the URL until HTTP 200 (up to ~15 minutes)
-    - destroy resources by default to avoid charges
-
-Environment toggles:
-- SKIP_DESTROY=1 to keep resources
-- MAX_WAIT_SECONDS and SLEEP_SECONDS to tune health-check wait
-- TF_VAR_* to set Terraform variables (e.g., TF_VAR_aws_region)
-
-# Step 2 GitHub Actions
-When code is changed in the webapp repository, the infrastructure repository should be notified and the infrastructure should be updated.
+# Step 2: Get CD working with GitHub
+When the web application code is changed in the webapp repository, the infrastructure repository should be notified and the infrastructure should be updated.
 
 ## CD Pipeline Requirements (GitHub Actions)
 
@@ -188,7 +183,9 @@ When code is changed in the webapp repository, the infrastructure repository sho
 - Push to `main` branch
 - Manual workflow dispatch (for testing)
 
-### Workflow Steps
+### Terraform and GitHub Workflow Steps
+XXX consider adjusting the below to reflect the different systems doing what.
+
 1. **Checkout Code**: Checkout the repository
 2. **Setup Terraform**: Install Terraform CLI
 3. **Configure AWS Credentials**: Use GitHub Secrets for AWS access
@@ -207,7 +204,7 @@ When code is changed in the webapp repository, the infrastructure repository sho
 - `AWS_REGION`: us-east-1
 - `AWS_ACCOUNT_ID`: AWS account ID (optional, for S3 bucket naming)
 
-#### Option B: GitHub Actions (manual trigger)
+#### Setup and test GitHub Actions on Infrastructure Repository
 A workflow is provided to run the same test using your AWS credentials and region.
 
 - Workflow: .github/workflows/test-deploy.yml
@@ -224,11 +221,6 @@ How to run:
     - aws_region: defaults to us-east-1
     - skip_destroy: default false (will destroy after test)
 4. The job will provision, wait for HTTP 200, and destroy by default.
-
-Notes on costs and cleanup:
-- The test script/workflow destroys by default. If you skip destroy, ensure you run scripts/destroy.sh or terraform destroy in terraform/ afterward to avoid charges.
-- S3 artifact buckets with versioning may retain versions; empty and delete as needed.
-
 
 ##### Setup GitHub Actions
 
@@ -515,122 +507,28 @@ In **this repository** (webapp-devops-aws):
 - ✅ **Flexibility**: Manual trigger option for deploying specific versions
 
 Notes on costs and cleanup:
-- The test script/workflow destroys by default. If you skip destroy, ensure you run scripts/destroy.sh or terraform destroy in terraform/ afterward to avoid charges.
+- If you skip destroy, ensure you run scripts/destroy.sh or terraform destroy in terraform/ afterward to avoid charges.
 - S3 artifact buckets with versioning may retain versions; empty and delete as needed.
 
 ---
 
-## Resources & Learning Materials
+## Further Reading (CD-focused)
 
-### GitHub Actions Tutorials
-
-#### Video Tutorials
-
-**Comprehensive Courses**:
-- **[Complete GitHub Actions Course - From BEGINNER to PRO](https://www.youtube.com/watch?v=Xwpi0ITkL3U)** [[1]](https://www.youtube.com/watch?v=Xwpi0ITkL3U)
-  - Full course covering fundamentals to advanced topics
-  - Perfect for getting started with GitHub Actions
-
-- **[GitHub Actions Tutorial | From Zero to Hero in 90 minutes](https://www.youtube.com/watch?v=TLB5MY9BBa4)** [[2]](https://www.youtube.com/watch?v=TLB5MY9BBa4)
-  - Comprehensive tutorial covering all basics in one session
-  - Ideal for quick onboarding
-
-- **[GitHub Actions Tutorial - Basic Concepts and CI/CD Pipeline with Docker](https://www.youtube.com/watch?v=R8_veQiYBjI)** by TechWorld with Nana [[3]](https://www.youtube.com/watch?v=R8_veQiYBjI)
-  - Covers basic concepts and practical CI/CD implementation
-  - Includes Docker build and push examples
-  - Great for understanding real-world workflows
-
-**Repository Dispatch & Cross-Repository Triggers**:
-- **[GitHub Actions - Trigger on a Custom Event](https://www.youtube.com/watch?v=TmuqKFdh6kw)** by Mickey Gousset [[4]](https://www.youtube.com/watch?v=TmuqKFdh6kw)
-  - Detailed explanation of `repository_dispatch` events
-  - Shows how to create custom events and payloads
-  - Part of a comprehensive GitHub Actions series
-
-- **[Async workflows with repository dispatch](https://www.youtube.com/watch?v=-xrFNFby7hc)** - GitHub Satellite 2020 [[5]](https://www.youtube.com/watch?v=-xrFNFby7hc)
-  - Advanced patterns for async workflows
-  - Real-world use cases
-
-- **[Trigger Another Repository's Github Action Workflow and Wait for Result](https://www.youtube.com/watch?v=-lI1LjhB_FE)** [[6]](https://www.youtube.com/watch?v=-lI1LjhB_FE)
-  - Step-by-step guide for cross-repository triggers
-  - Shows how to wait for completion
-
-**Manual Workflow Triggers**:
-- **[Manually Trigger GitHub Actions Workflows Using workflow_dispatch](https://www.youtube.com/watch?v=nQRgTUwGBBA)** by goobar [[7]](https://www.youtube.com/watch?v=nQRgTUwGBBA)
-  - How to add manual triggers to workflows
-  - Adding inputs to workflows
-
-- **[Add Inputs to GitHub Actions Workflows](https://www.youtube.com/watch?v=Sb_zLeHEVqQ)** [[8]](https://www.youtube.com/watch?v=Sb_zLeHEVqQ)
-  - Creating parameterized workflows
-  - User input handling
-
-**Playlists**:
-- **[GitHub Actions: The Full Course - Learn by Doing!](https://www.youtube.com/playlist?list=PLArH6NjfKsUhvGHrpag7SuPumMzQRhUKY)** [[9]](https://www.youtube.com/playlist?list=PLArH6NjfKsUhvGHrpag7SuPumMzQRhUKY)
-  - Complete course with hands-on examples
-  - Covers CI pipelines and practical workflows
-
-- **[Mastering GitHub Actions](https://www.youtube.com/playlist?list=PLLrA_pU9-Gz2GnvKN0kzVfIZVEUApgjTN)** [[10]](https://www.youtube.com/playlist?list=PLLrA_pU9-Gz2GnvKN0kzVfIZVEUApgjTN)
-  - Curated collection of tutorials
-  - From basics to advanced topics
-
-#### Written Tutorials
-
-**Repository Dispatch**:
-- **[Triggering GitHub Actions Using Repository Dispatches](https://dev.to/teamhive/triggering-github-actions-using-repository-dispatches-39d1)** [[11]](https://dev.to/teamhive/triggering-github-actions-using-repository-dispatches-39d1)
-  - Explanation of repository dispatch HTTP requests
-  - Practical examples
-
-- **[How to Leverage the GitHub repository_dispatch Event](https://www.anantacloud.com/post/github-repository-dispatch-event-for-custom-triggers)** [[12]](https://www.anantacloud.com/post/github-repository-dispatch-event-for-custom-triggers)
-  - Manual triggers from external sources
-  - REST API usage examples
-
-- **[Triggering GitHub Actions across different repositories](https://blog.marcnuri.com/triggering-github-actions-across-different-repositories)** [[13]](https://blog.marcnuri.com/triggering-github-actions-across-different-repositories)
-  - Authentication requirements
-  - Cross-repository patterns
-
-- **[Trigger your Test Automation project through workflow - Cross Repository](https://ayeshahansi.medium.com/trigger-your-test-automation-project-through-the-workflow-of-the-application-cross-repository-58759aa82d15)** [[14]](https://ayeshahansi.medium.com/trigger-your-test-automation-project-through-the-workflow-of-the-application-cross-repository-58759aa82d15)
-  - Real-world automation example
-  - Test triggering patterns
-
-**GitHub Actions Reference**:
-- **[peter-evans/repository-dispatch](https://github.com/peter-evans/repository-dispatch)** [[15]](https://github.com/peter-evans/repository-dispatch)
-  - Official action for creating repository dispatch events
-  - Examples and documentation
-
-- **[Events that trigger workflows - GitHub Docs](https://docs.github.com/enterprise-cloud@latest/actions/using-workflows/events-that-trigger-workflows)** [[16]](https://docs.github.com/enterprise-cloud@latest/actions/using-workflows/events-that-trigger-workflows)
-  - Complete reference of workflow triggers
-  - Official GitHub documentation
-
-### AWS & Terraform Resources
-
-**Elastic Beanstalk**:
-- [AWS Elastic Beanstalk Documentation](https://docs.aws.amazon.com/elasticbeanstalk/)
-  - Official AWS documentation
-  - Deployment guides and best practices
-
-- [AWS Elastic Beanstalk - Node.js Platform](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/concepts.platforms.nodejs.html)
-  - Node.js-specific platform documentation
-  - Configuration options
-
-**Terraform**:
-- [Terraform AWS Provider - Elastic Beanstalk Resources](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/elastic_beanstalk_environment)
-  - Official Terraform documentation
-  - Resource configuration examples
-
-- [HashiCorp Learn - Get Started with Terraform](https://learn.hashicorp.com/collections/terraform/aws-get-started)
-  - Interactive tutorials
-  - AWS-specific examples
+- Repository dispatch action: https://github.com/peter-evans/repository-dispatch
+- GitHub Actions events reference (workflow_dispatch, repository_dispatch): https://docs.github.com/actions/using-workflows/events-that-trigger-workflows
+- AWS Elastic Beanstalk docs: https://docs.aws.amazon.com/elasticbeanstalk/
+- Terraform AWS provider (Elastic Beanstalk): https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/elastic_beanstalk_environment
+- Terraform Learn (AWS): https://learn.hashicorp.com/collections/terraform/aws-get-started
 
 ### Quick Reference
 
-**Key Concepts**:
-- **Repository Dispatch**: Manual workflow trigger from external sources via HTTP API
-- **Workflow Dispatch**: Manual workflow trigger from GitHub UI with optional inputs
-- **Personal Access Token (PAT)**: Authentication token for cross-repository operations
-- **GitHub Actions Runner**: Virtual machine that executes workflow jobs
-- **Workflow Job**: A set of steps that execute on the same runner
-- **Workflow Step**: Individual task within a job
+- Repository Dispatch: Trigger a workflow in another repo via API
+- Workflow Dispatch: Manually run a workflow from the GitHub UI
+- PAT: Personal Access Token used to authenticate cross-repo dispatch
+- EB packaging tip: Zip the app contents without a parent folder; ensure `package.json` has a `start` script
+- Cleanup: Destroy Terraform resources when finished to avoid charges
 
-**Troubleshooting Links**:
-- [GitHub Actions Troubleshooting Guide](https://docs.github.com/en/actions/learn-github-actions/troubleshooting-github-actions)
-- [AWS Elastic Beanstalk Troubleshooting](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/troubleshooting.html)
-- [Terraform Debugging](https://developer.hashicorp.com/terraform/internals/debugging)
+Troubleshooting:
+- GitHub Actions: https://docs.github.com/en/actions/learn-github-actions/troubleshooting-github-actions
+- Elastic Beanstalk: https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/troubleshooting.html
+- Terraform debugging: https://developer.hashicorp.com/terraform/internals/debugging
