@@ -1,0 +1,125 @@
+name: Deploy from Webapp Update
+
+on:
+  repository_dispatch:
+    types: [webapp-updated]
+  workflow_dispatch:
+    inputs:
+      webapp_repo:
+        description: 'Webapp repository (format: owner/repo)'
+        required: true
+      webapp_ref:
+        description: 'Branch/tag/commit to deploy'
+        required: false
+        default: 'main'
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+  APP_NAME: asgardeo-webapp-demo
+  ENV_NAME: asgardeo-webapp-demo-env
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout infrastructure repo
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Determine webapp source
+        id: webapp_source
+        run: |
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            echo "repo=${{ github.event.client_payload.webapp_repo }}" >> $GITHUB_OUTPUT
+            echo "ref=${{ github.event.client_payload.webapp_ref }}" >> $GITHUB_OUTPUT
+            echo "sha=${{ github.event.client_payload.webapp_sha }}" >> $GITHUB_OUTPUT
+          else
+            echo "repo=${{ inputs.webapp_repo }}" >> $GITHUB_OUTPUT
+            echo "ref=${{ inputs.webapp_ref || 'main' }}" >> $GITHUB_OUTPUT
+            echo "sha=manual" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout webapp repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.webapp_source.outputs.repo }}
+          ref: ${{ steps.webapp_source.outputs.ref }}
+          path: webapp-source
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve checked-out SHA
+        id: resolved_sha
+        working-directory: webapp-source
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Package webapp
+        run: |
+          cd webapp-source
+          rm -f ../webapp.zip
+          # Package without parent directory (EB requirement)
+          zip -r ../webapp.zip * -x "*.git*" -x "node_modules/*" -x ".github/*" -x "*.md"
+          cd ..
+          ls -lh webapp.zip
+          echo "Packaged webapp from SHA: ${{ steps.resolved_sha.outputs.sha }}"
+
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init -input=false
+
+      - name: Terraform Plan
+        working-directory: ./terraform
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: ./terraform
+        run: terraform apply -input=false -auto-approve tfplan
+
+      - name: Read Terraform outputs
+        id: tf_outputs
+        working-directory: ./terraform
+        shell: bash
+        run: |
+          echo "bucket=$(terraform output -raw artifacts_bucket_name)" >> $GITHUB_OUTPUT
+          echo "url=$(terraform output -raw beanstalk_environment_url)" >> $GITHUB_OUTPUT
+
+      - name: Output environment URL
+        run: |
+          echo "Environment URL: ${{ steps.tf_outputs.outputs.url }}"
+
+      - name: Health check
+        run: |
+          URL="${{ steps.tf_outputs.outputs.url }}"
+          echo "Running health check on: $URL"
+          for i in {1..30}; do
+            echo "Attempt $i/30..."
+            if curl -fsS "$URL" > /dev/null 2>&1; then
+              echo "✅ Health check passed!"
+              curl -i "$URL"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "❌ Health check failed after 5 minutes"
+          curl -i "$URL" || true
+          exit 1
+
+      - name: Output deployment info
+        if: always()
+        run: |
+          echo "### 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment URL**: ${{ steps.tf_outputs.outputs.url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Webapp SHA (resolved)**: ${{ steps.resolved_sha.outputs.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Webapp Repo**: ${{ steps.webapp_source.outputs.repo }}" >> $GITHUB_STEP_SUMMARY

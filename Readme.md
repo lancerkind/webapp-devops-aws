@@ -260,9 +260,6 @@ In your **webapp repository** (the one maintained by the partner team):
      notify:
        runs-on: ubuntu-latest
        steps:
-         - name: Checkout webapp code
-           uses: actions/checkout@v4
-
          - name: Trigger infrastructure deployment
            uses: peter-evans/repository-dispatch@v2
            with:
@@ -290,8 +287,7 @@ In **this repository** (webapp-devops-aws):
      - `AWS_SECRET_ACCESS_KEY`
      - `AWS_REGION` (optional, defaults to us-east-1)
 
-2. **Create deployment workflow**: `.github/workflows/deploy-from-webapp.yml`
-XXX delete this step after creating the file.  Is this file a duplicate of the one already in the infrastructure repo? Anyways, it should already be created.
+2. **Deployment workflow**: `.github/workflows/deploy-from-web.yml` (this file already exists in this repo)
 
    ```yaml
    name: Deploy from Webapp Update
@@ -339,11 +335,9 @@ XXX delete this step after creating the file.  Is this file a duplicate of the o
              if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
                echo "repo=${{ github.event.client_payload.webapp_repo }}" >> $GITHUB_OUTPUT
                echo "ref=${{ github.event.client_payload.webapp_ref }}" >> $GITHUB_OUTPUT
-               echo "sha=${{ github.event.client_payload.webapp_sha }}" >> $GITHUB_OUTPUT
              else
                echo "repo=${{ inputs.webapp_repo }}" >> $GITHUB_OUTPUT
                echo "ref=${{ inputs.webapp_ref || 'main' }}" >> $GITHUB_OUTPUT
-               echo "sha=manual" >> $GITHUB_OUTPUT
              fi
 
          - name: Checkout webapp repository
@@ -353,6 +347,12 @@ XXX delete this step after creating the file.  Is this file a duplicate of the o
              ref: ${{ steps.webapp_source.outputs.ref }}
              path: webapp-source
              token: ${{ secrets.GITHUB_TOKEN }}
+
+         - name: Resolve checked-out SHA
+           id: resolved_sha
+           working-directory: webapp-source
+           run: |
+             echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
          - name: Package webapp
            run: |
@@ -414,7 +414,7 @@ XXX delete this step after creating the file.  Is this file a duplicate of the o
              echo "### 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
              echo "" >> $GITHUB_STEP_SUMMARY
              echo "- **Environment URL**: ${{ steps.tf_outputs.outputs.url }}" >> $GITHUB_STEP_SUMMARY
-             echo "- **Webapp SHA**: ${{ steps.webapp_source.outputs.sha }}" >> $GITHUB_STEP_SUMMARY
+             echo "- **Webapp SHA (resolved)**: ${{ steps.resolved_sha.outputs.sha }}" >> $GITHUB_STEP_SUMMARY
              echo "- **Webapp Repo**: ${{ steps.webapp_source.outputs.repo }}" >> $GITHUB_STEP_SUMMARY
    ```
 
