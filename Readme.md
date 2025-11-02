@@ -57,13 +57,14 @@ GitHub repository.  That's a little complicated so to make it easier, we'll brea
 ## Terraform Infrastructure Components
 You'll need to install these dependencies to test using your local environment:
 - Terraform CLI
-- AWS CLI
+- AWS CLI (Optional: Terraform will use AWS CLI's credential configuration files in your user directory, or you'll need to environmental variables mentioned in next bullet)
+- AWS credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION)
 
 ### 1. VPC (Virtual Private Cloud)
 - **Resource Type**: `aws_vpc`
-- **Resource Name**: `asgardeo_vpc` (or similar)
+- **Resource Name**: `asgardeo_vpc`
 - **Requirements**:
-    - CIDR block: 10.0.0.0/16
+    - CIDR block: 10.0.0.0/16 (or whatever you'd like)
     - Enable DNS hostnames and DNS support
     - Public subnets in at least 2 availability zones (Beanstalk requirement)
     - Internet Gateway for public internet access
@@ -71,7 +72,7 @@ You'll need to install these dependencies to test using your local environment:
 
 ### 2. Security Group
 - **Resource Type**: `aws_security_group`
-- **Resource Name**: `asgardeo_security_group` (or similar)
+- **Resource Name**: `asgardeo_security_group`
 - **Requirements**:
     - Allow inbound HTTP traffic (port 80) from 0.0.0.0/0
     - Allow outbound traffic to all destinations (0.0.0.0/0)
@@ -150,7 +151,7 @@ You'll need to install these dependencies to test using your local environment:
 - Ensure all AWS resources are removed to avoid charges
 - S3 bucket with application versions may need manual cleanup
 
-### Note about web app package
+### Note about the web app package
 This setup requires .zip file containing a NodeJS application:
 - no parent directory
 - package.json with a "start" script
@@ -184,27 +185,22 @@ When the web application code is changed in the webapp repository, the infrastru
 - Manual workflow dispatch (for testing)
 
 ### Terraform and GitHub Workflow Steps
-XXX consider adjusting the below to reflect the different systems doing what.
 
-1. **Checkout Code**: Checkout the repository
-2. **Setup Terraform**: Install Terraform CLI
-3. **Configure AWS Credentials**: Use GitHub Secrets for AWS access
-4. **Terraform Init**: Initialize Terraform working directory
-5. **Terraform Plan**: Preview infrastructure changes
-6. **Terraform Apply**: Apply infrastructure changes (auto-approve for POC)
-7. **Package Application**: Create .zip bundle of webapp files
-8. **Upload to S3**: Upload application bundle to S3
-9. **Deploy to Beanstalk**: Create/update application version and deploy
-10. **Output URL**: Display Elastic Beanstalk environment URL
-11. **Health Check**: Verify application is accessible (curl the homepage)
+## Workflow steps for the Infrastructure Repository's workflow:
+1. **Package Application**: Checkout webapp repo, create .zip bundle of webapp files
+2. **Checkout Code**: Checkout the infrastructure repository
+3. **Setup Terraform**: Install Terraform CLI
+4. **Configure AWS Credentials**: Use GitHub Secrets for AWS access
+5. **Terraform Init**: Initialize Terraform working directory
+6. **Terraform Plan**: Preview infrastructure changes
+7. **Terraform Apply**: Apply infrastructure changes (auto-approve for POC)
+8. **Output URL**: Display Elastic Beanstalk environment URL
+9. **Health Check**: Verify application is accessible (curl the homepage)
 
-## Required GitHub Secrets
-- `AWS_ACCESS_KEY_ID`: AWS IAM user access key
-- `AWS_SECRET_ACCESS_KEY`: AWS IAM user secret key
-- `AWS_REGION`: us-east-1
-- `AWS_ACCOUNT_ID`: AWS account ID (optional, for S3 bucket naming)
+## Workflow steps for the Webapp Repository's workflow:
+1. **Trigger Infrastructure Deployment**: Trigger infrastructure deployment workflow when there is a code change
 
-#### Setup and test GitHub Actions on Infrastructure Repository
+### Setup and test GitHub Actions for Infrastructure Repository and Webapp Repository
 A workflow is provided to run the same test using your AWS credentials and region.
 
 - Workflow: .github/workflows/test-deploy.yml
@@ -221,6 +217,12 @@ How to run:
     - aws_region: defaults to us-east-1
     - skip_destroy: default false (will destroy after test)
 4. The job will provision, wait for HTTP 200, and destroy by default.
+
+##### Required GitHub Secrets
+- `AWS_ACCESS_KEY_ID`: AWS IAM user access key
+- `AWS_SECRET_ACCESS_KEY`: AWS IAM user secret key
+- `AWS_REGION`: us-east-1
+- `AWS_ACCOUNT_ID`: AWS account ID (optional, for S3 bucket naming)
 
 ##### Setup GitHub Actions
 
@@ -289,6 +291,8 @@ In **this repository** (webapp-devops-aws):
      - `AWS_REGION` (optional, defaults to us-east-1)
 
 2. **Create deployment workflow**: `.github/workflows/deploy-from-webapp.yml`
+XXX delete this step after creating the file.  Is this file a duplicate of the one already in the infrastructure repo? Anyways, it should already be created.
+
    ```yaml
    name: Deploy from Webapp Update
 
@@ -380,44 +384,12 @@ In **this repository** (webapp-devops-aws):
              echo "bucket=$(terraform output -raw artifacts_bucket_name)" >> $GITHUB_OUTPUT
              echo "url=$(terraform output -raw beanstalk_environment_url)" >> $GITHUB_OUTPUT
 
-         - name: Upload bundle to S3
-           env:
-             BUCKET: ${{ steps.tf_outputs.outputs.bucket }}
+         # No direct AWS CLI deployment here; Terraform has already created/updated
+         # the Elastic Beanstalk application version and pointed the environment
+         # to the new artifact during terraform apply.
+         - name: Output environment URL
            run: |
-             KEY="webapp-${{ steps.webapp_source.outputs.sha }}-$(date +%s).zip"
-             echo "Uploading to S3://${BUCKET}/${KEY}"
-             aws s3 cp webapp.zip s3://$BUCKET/$KEY --region ${{ env.AWS_REGION }}
-             echo "s3_key=$KEY" >> $GITHUB_ENV
-
-         - name: Create application version
-           env:
-             BUCKET: ${{ steps.tf_outputs.outputs.bucket }}
-           run: |
-             SHA_SHORT=$(echo "${{ steps.webapp_source.outputs.sha }}" | cut -c1-7)
-             LABEL="webapp-${SHA_SHORT}-$(date +%s)"
-             echo "Creating version: $LABEL"
-             aws elasticbeanstalk create-application-version \
-               --application-name "$APP_NAME" \
-               --version-label "$LABEL" \
-               --source-bundle S3Bucket=$BUCKET,S3Key=${s3_key} \
-               --description "Deployed from ${{ steps.webapp_source.outputs.repo }} @ ${SHA_SHORT}" \
-               --region ${{ env.AWS_REGION }}
-             echo "version_label=$LABEL" >> $GITHUB_ENV
-
-         - name: Deploy to Elastic Beanstalk
-           run: |
-             echo "Deploying version: $version_label"
-             aws elasticbeanstalk update-environment \
-               --environment-name "$ENV_NAME" \
-               --version-label "$version_label" \
-               --region ${{ env.AWS_REGION }}
-
-         - name: Wait for deployment
-           run: |
-             echo "Waiting for environment to update (this may take 5-10 minutes)..."
-             aws elasticbeanstalk wait environment-updated \
-               --environment-names "$ENV_NAME" \
-               --region ${{ env.AWS_REGION }} || echo "Wait timed out, check manually"
+             echo "Environment URL: ${{ steps.tf_outputs.outputs.url }}"
 
          - name: Health check
            run: |
@@ -442,7 +414,6 @@ In **this repository** (webapp-devops-aws):
              echo "### 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
              echo "" >> $GITHUB_STEP_SUMMARY
              echo "- **Environment URL**: ${{ steps.tf_outputs.outputs.url }}" >> $GITHUB_STEP_SUMMARY
-             echo "- **Version Label**: $version_label" >> $GITHUB_STEP_SUMMARY
              echo "- **Webapp SHA**: ${{ steps.webapp_source.outputs.sha }}" >> $GITHUB_STEP_SUMMARY
              echo "- **Webapp Repo**: ${{ steps.webapp_source.outputs.repo }}" >> $GITHUB_STEP_SUMMARY
    ```
@@ -464,7 +435,7 @@ In **this repository** (webapp-devops-aws):
 4. Then check infrastructure repo's Actions tab - should see "Deploy from Webapp Update" trigger automatically
 5. Visit the Elastic Beanstalk URL to see your changes live!
 
-##### How It Works
+# How It Works
 
 1. **Developer pushes to webapp repo's `main` branch**
 2. **Webapp workflow** packages the app and sends a `repository_dispatch` event to infrastructure repo
@@ -477,6 +448,20 @@ In **this repository** (webapp-devops-aws):
    - Deploys to environment
    - Waits for deployment to complete
    - Runs health check
+
+## Benefits of This Approach
+
+- ✅ **Separation of Concerns**: Webapp developers don't need AWS or Terraform knowledge
+- ✅ **Automatic Deployments**: Push to main = automatic deploy
+- ✅ **Audit Trail**: Full deployment history in GitHub Actions
+- ✅ **Rollback Capability**: Can manually trigger deployment of any previous commit
+- ✅ **Security**: AWS credentials only stored in infrastructure repo
+- ✅ **Flexibility**: Manual trigger option for deploying specific versions
+
+Notes on costs and cleanup:
+- If you skip destroy, ensure you run scripts/destroy.sh or terraform destroy in terraform/ afterward to avoid charges.
+- S3 artifact buckets with versioning may retain versions; empty and delete as needed.
+
 
 ##### Troubleshooting
 
@@ -496,19 +481,6 @@ In **this repository** (webapp-devops-aws):
 
 **Issue**: Deployment workflow can't checkout webapp repo
 - **Solution**: If webapp is private, add PAT to infrastructure repo secrets as `WEBAPP_REPO_TOKEN` and use it in checkout step
-
-##### Benefits of This Approach
-
-- ✅ **Separation of Concerns**: Webapp developers don't need AWS or Terraform knowledge
-- ✅ **Automatic Deployments**: Push to main = automatic deploy
-- ✅ **Audit Trail**: Full deployment history in GitHub Actions
-- ✅ **Rollback Capability**: Can manually trigger deployment of any previous commit
-- ✅ **Security**: AWS credentials only stored in infrastructure repo
-- ✅ **Flexibility**: Manual trigger option for deploying specific versions
-
-Notes on costs and cleanup:
-- If you skip destroy, ensure you run scripts/destroy.sh or terraform destroy in terraform/ afterward to avoid charges.
-- S3 artifact buckets with versioning may retain versions; empty and delete as needed.
 
 ---
 
