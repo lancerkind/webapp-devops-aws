@@ -357,9 +357,11 @@ Notes on costs and cleanup:
 - **Solution**: If webapp is private, add PAT to infrastructure repo secrets as `WEBAPP_REPO_TOKEN` and use it in checkout step
 
 ---
+# Resources
 
 ## Further Reading (CD-focused)
 
+- Repository Dispatch (short video): https://youtu.be/Sb_zLeHEVqQ
 - Repository dispatch action: https://github.com/peter-evans/repository-dispatch
 - GitHub Actions events reference (workflow_dispatch, repository_dispatch): https://docs.github.com/actions/using-workflows/events-that-trigger-workflows
 - AWS Elastic Beanstalk docs: https://docs.aws.amazon.com/elasticbeanstalk/
