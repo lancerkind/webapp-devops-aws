@@ -219,10 +219,132 @@ How to run:
 4. The job will provision, wait for HTTP 200, and destroy by default.
 
 ##### Required GitHub Secrets
+Filling the below bullets out is the goal but first you'll need to create the AWS user for GitHub Actions, create an access key for the user, as explained in the next section.
 - `AWS_ACCESS_KEY_ID`: AWS IAM user access key
 - `AWS_SECRET_ACCESS_KEY`: AWS IAM user secret key
 - `AWS_REGION`: us-east-1
 - `AWS_ACCOUNT_ID`: AWS account ID (optional, for S3 bucket naming)
+
+###### Steps to setup a user for GitHub Actions
+I vaguely did the steps below. What I did was created user github-deploy.  During that process, I added that user to a new group called asgardeo-admin, and created a policy for the group.
+To create a policy for the group, I copy/pasted main.tf and asked a GPT for a policy file that
+included the permissions needed, and then pasted that into AWS console for the policy. Tip: You can use the 
+visualize policy editor to see what the policy looks like at a higher level than reading through the policy's json format.
+
+1. Create an IAM user 
+2. Add the user to the `AdministratorAccess` policy (or create a group and attach the policy and user to that group)
+3. Create programmatic access for that user: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html (I later found the "create access key" link on the user's summary page in IAM.)
+4. Create a new access key for the user
+5. Store the access key ID and secret key in GitHub Secrets, and the other secrets mentioned in the previous section.
+
+The policy below could be tightened up with wildcards.  Maybe try that later.
+* Resource: "*" is used for IAM, EC2, and Elastic Beanstalk because Terraform creates resources with dynamic names and ARNs — a fully scoped ARN is difficult to know in advance.
+* S3 permissions could be further restricted to only the bucket Terraform will create, but since the bucket name is dynamically generated (asgardeo-artifacts-...), wildcard is needed.
+
+Another alternative is to give it full admin access but that would violate minimum privilege principle.
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "EC2Networking",
+            "Effect": "Allow",
+            "Action": [
+                "ec2:CreateVpc",
+                "ec2:DescribeVpcs",
+                "ec2:DeleteVpc",
+                "ec2:CreateSubnet",
+                "ec2:DescribeSubnets",
+                "ec2:DeleteSubnet",
+                "ec2:CreateInternetGateway",
+                "ec2:AttachInternetGateway",
+                "ec2:DescribeInternetGateways",
+                "ec2:DeleteInternetGateway",
+                "ec2:CreateRouteTable",
+                "ec2:AssociateRouteTable",
+                "ec2:DescribeRouteTables",
+                "ec2:DeleteRouteTable",
+                "ec2:CreateSecurityGroup",
+                "ec2:DescribeSecurityGroups",
+                "ec2:AuthorizeSecurityGroupIngress",
+                "ec2:AuthorizeSecurityGroupEgress",
+                "ec2:RevokeSecurityGroupIngress",
+                "ec2:RevokeSecurityGroupEgress",
+                "ec2:DeleteSecurityGroup",
+                "ec2:DescribeAvailabilityZones",
+                "ec2:DescribeInstances",
+                "ec2:DescribeTags"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "S3Buckets",
+            "Effect": "Allow",
+            "Action": [
+                "s3:CreateBucket",
+                "s3:PutBucketVersioning",
+                "s3:ListBucket",
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::*"
+            ]
+        },
+        {
+            "Sid": "ElasticBeanstalk",
+            "Effect": "Allow",
+            "Action": [
+                "elasticbeanstalk:CreateApplication",
+                "elasticbeanstalk:DescribeApplications",
+                "elasticbeanstalk:DeleteApplication",
+                "elasticbeanstalk:CreateApplicationVersion",
+                "elasticbeanstalk:DescribeApplicationVersions",
+                "elasticbeanstalk:DeleteApplicationVersion",
+                "elasticbeanstalk:CreateEnvironment",
+                "elasticbeanstalk:DescribeEnvironments",
+                "elasticbeanstalk:TerminateEnvironment",
+                "elasticbeanstalk:UpdateEnvironment"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "IAMRoles",
+            "Effect": "Allow",
+            "Action": [
+                "iam:CreateRole",
+                "iam:AttachRolePolicy",
+                "iam:PassRole",
+                "iam:CreateInstanceProfile",
+                "iam:AddRoleToInstanceProfile",
+                "iam:GetRole",
+                "iam:GetInstanceProfile",
+                "iam:ListRoles",
+                "iam:ListInstanceProfiles"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+
+```
+##### Test the Pipeline
+Let's test that we've got so far:
+* execute the github workflow
+* GitHub can operate AWS 
+* AWS credentials are setup and have the right permissions
+* terraform can operate AWS
+
+Let's run the test workflow:
+1. In the Actions tab, run "Test Terraform Deploy".
+2. Inputs:
+    - aws_region: defaults to us-east-1
+    - skip_destroy: default false (will destroy after test)
+4. The job will provision, wait for HTTP 200, and destroy by default.
+
+Count to 20 after clicking the "Run workflow" button, and you'll see the job run.
+
 
 ##### Setup GitHub Actions
 
@@ -362,6 +484,7 @@ Notes on costs and cleanup:
 ## Further Reading (CD-focused)
 
 - Repository Dispatch (short video): https://youtu.be/Sb_zLeHEVqQ
+- Another Repostitory Dispatch (short video): https://www.youtube.com/watch?v=-xrFNFby7hc
 - Repository dispatch action: https://github.com/peter-evans/repository-dispatch
 - GitHub Actions events reference (workflow_dispatch, repository_dispatch): https://docs.github.com/actions/using-workflows/events-that-trigger-workflows
 - AWS Elastic Beanstalk docs: https://docs.aws.amazon.com/elasticbeanstalk/
