@@ -431,7 +431,7 @@ In **this repository** (webapp-devops-aws):
 4. Then check infrastructure repo's Actions tab - should see "Deploy from Webapp Update" trigger automatically
 5. Visit the Elastic Beanstalk URL to see your changes live!
 
-# How It Works
+# How Deployment Works
 
 1. **Developer pushes to webapp repo's `main` branch**
 2. **Webapp workflow** packages the app and sends a `repository_dispatch` event to infrastructure repo
@@ -458,8 +458,11 @@ Notes on costs and cleanup:
 - If you skip destroy, ensure you run scripts/destroy.sh or terraform destroy in terraform/ afterward to avoid charges.
 - S3 artifact buckets with versioning may retain versions; empty and delete as needed.
 
+# Notes on items to followup on
+- later I added in using the sha variable for naming the zip file. Go back and see if this strategy is compatible with:
+  - run terraform manually on local machine. (I suspect this variable will be undefined in this case.)
 
-##### Troubleshooting
+# Troubleshooting
 
 **Issue**: Repository dispatch doesn't trigger infrastructure deployment
 - **Solution**: Verify the PAT has `repo` scope and hasn't expired
@@ -490,6 +493,9 @@ Notes on costs and cleanup:
 - AWS Elastic Beanstalk docs: https://docs.aws.amazon.com/elasticbeanstalk/
 - Terraform AWS provider (Elastic Beanstalk): https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/elastic_beanstalk_environment
 - Terraform Learn (AWS): https://learn.hashicorp.com/collections/terraform/aws-get-started
+- GitHub Actions: https://docs.github.com/en/actions/learn-github-actions/troubleshooting-github-actions
+- Elastic Beanstalk: https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/troubleshooting.html
+- Terraform debugging: https://developer.hashicorp.com/terraform/internals/debugging
 
 ### Quick Reference
 
@@ -498,8 +504,3 @@ Notes on costs and cleanup:
 - PAT: Personal Access Token used to authenticate cross-repo dispatch
 - EB packaging tip: Zip the app contents without a parent folder; ensure `package.json` has a `start` script
 - Cleanup: Destroy Terraform resources when finished to avoid charges
-
-Troubleshooting:
-- GitHub Actions: https://docs.github.com/en/actions/learn-github-actions/troubleshooting-github-actions
-- Elastic Beanstalk: https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/troubleshooting.html
-- Terraform debugging: https://developer.hashicorp.com/terraform/internals/debugging

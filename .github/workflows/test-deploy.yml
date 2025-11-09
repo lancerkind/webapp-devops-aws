@@ -54,6 +54,7 @@ jobs:
         env:
           SKIP_DESTROY: ${{ github.event.inputs.skip_destroy == 'true' && '1' || '0' }}
           TF_VAR_aws_region: ${{ env.AWS_REGION }}
+          TF_VAR_commit_sha: ${{ github.sha }}
         run: bash scripts/test_deploy.sh
 
       - name: Print Terraform outputs
