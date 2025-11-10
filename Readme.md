@@ -138,7 +138,7 @@ You'll need to install these dependencies to test using your local environment:
 - `vpc_id`: The VPC ID created
 - `application_version`: The deployed application version
 
-## Testing Requirements
+## Testing What We Have So Far
 
 ### Manual Testing
 1. Run `terraform apply` locally to provision infrastructure
@@ -160,7 +160,7 @@ This setup requires .zip file containing a NodeJS application:
 ## Test Sample Application
 Include a minimal NodeJS and an "index.html` for initial testing:
 
-## Test Terraform works independant of Git
+## Test Terraform works independent of Git
 Prerequisites:
 - Terraform installed
 - AWS credentials in your environment (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION)
@@ -175,8 +175,146 @@ Steps:
 4. go to the url displayed in the terraform output to see app working
 5. terraform destroy
 
+## Put Terraform state in S3
+In Step 2, when we use terraform with Github actions, we'll need to have terraform state stored in S3 otherwise everytime 
+the GitHub runners ephemeral infrastructure 
+runs terraform, the state will be lost and the next call to terraform will run into errors as it will try to re-create 
+infrastructure that is already created.
+
+So first, let's setup the S3 bucket and dynamoDB (for locking) to store the terraform state, and then test this out with our local terraform install.
+
+### Manual setup with AWS CLI (follow these instructions)
+Well use AWS CLI commands to create a secure S3 bucket for Terraform state and a DynamoDB table for state locking, 
+then configure Terraform to use them. (It turns out you *could* use terraform to set this up but it needs to be a 
+seperate terraform plan and state from the one in this repo's terraform directory,
+so I went with aws CLI to keep things clearly seperated and likely less confusing. If you've never used aws cli, then 
+this is a gentle introduction of only a few steps. Visit with your favorite GPT to learn more about the instructions.
+You could do all of this in the AWS console but the AWS script is the most succinct way to get across what needs to be done.)
+
+Prerequisites:
+- AWS CLI installed and authenticated to the target account
+- Terraform installed locally
+- You are in this repo’s root directory and have already created `webapp.zip` (see earlier section)
+
+1) Set variables
+```
+REGION=us-east-1
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+BUCKET="asgardeo-dev-${ACCOUNT_ID}-tfstate"   # change "dev" if desired
+DDB_TABLE="terraform-locks"
+STATE_KEY="global/terraform.tfstate"
+```
+
+2) Create the S3 bucket (region-aware)
+Make a script or use the AWS CLI directly for you situation:
+```
+if [ "$REGION" = "us-east-1" ]; then
+  aws s3api create-bucket --bucket "$BUCKET"
+else
+  aws s3api create-bucket --bucket "$BUCKET" \
+    --create-bucket-configuration LocationConstraint="$REGION"
+fi
+```
+
+3) Harden the bucket (block public access, enable versioning, enable encryption)
+```
+aws s3api put-public-access-block --bucket "$BUCKET" \
+  --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+
+aws s3api put-bucket-versioning --bucket "$BUCKET" --versioning-configuration Status=Enabled
+
+aws s3api put-bucket-encryption --bucket "$BUCKET" --server-side-encryption-configuration '{
+  "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]
+}'
+```
+
+#### (Optional) Deny insecure (non-TLS) access to the bucket
+I didn't bother with this but I'm including it here in case you want to use this infrastructure in a production environment.
+```
+cat > /tmp/tfstate-bucket-policy.json <<JSON
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyInsecureTransport",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::${BUCKET}",
+        "arn:aws:s3:::${BUCKET}/*"
+      ],
+      "Condition": { "Bool": { "aws:SecureTransport": "false" } }
+    }
+  ]
+}
+JSON
+aws s3api put-bucket-policy --bucket "$BUCKET" --policy file:///tmp/tfstate-bucket-policy.json
+```
+
+4) Create a DynamoDB table for Terraform state locking
+```
+aws dynamodb create-table \
+  --table-name "$DDB_TABLE" \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST
+  
+aws dynamodb wait table-exists --table-name "$DDB_TABLE"
+```
+
+5) Initialize Terraform to use the S3 backend and migrate local state
+- We will pass backend parameters via flags (no code changes required).
+```
+cd terraform
+terraform init \
+  -backend-config="bucket=${BUCKET}" \
+  -backend-config="key=${STATE_KEY}" \
+  -backend-config="region=${REGION}" \
+  -backend-config="dynamodb_table=${DDB_TABLE}" \
+  -backend-config="encrypt=true" \
+  -reconfigure
+```
+
+The above command will configure the terraform backend to use the S3 bucket and DynamoDB table we created.  Then we
+migrate what is on the local drive to the S3 bucket with the `migrate-state` flag.  This is a one-time operation.  If you
+want to use the S3 backend in the future, you can run `terraform init` without the `migrate-state` flag.
+```
+terraform init -migrate-state
+```
+From here on, terraform will use the S3 bucket and DynamoDB table for state management. 
+
+6) Verify it worked
+Ask terraform:
+```bash
+terraform state pull | head -n 10
+```
+And you'll get something like the below.  Notice the artifacts_bucket_name's value.  This is the name of the S3 bucket.
+https://developer.hashicorp.com/terraform/language/backend/s3
+
+XXX This didn't work for me.
+###### State object exists in S3
+```aws s3 ls s3://$BUCKET/$(dirname "$STATE_KEY")/```
+XXX This didn't work for me.
+
+###### Lock table is active
+```aws dynamodb describe-table --table-name "$DDB_TABLE" --query 'Table.TableStatus'```
+
+7) Test locking (optional but recommended)
+- In terminal A: `terraform apply -auto-approve`
+- While it runs, in terminal B: `terraform plan` → you should see an "Error acquiring the state lock" message (expected). Stop terminal B. When A finishes, the lock should be released.
+
+###### WARNING: Only do this if you truly want to delete the backend and its data.
+Eventually, you may want to get ride of the terraform state when you're finished trying out this infrastructure.
+```
+aws s3 rm s3://$BUCKET --recursive
+aws s3api delete-bucket --bucket "$BUCKET"
+aws dynamodb delete-table --table-name "$DDB_TABLE"
+```
+
 # Step 2: Get CD working with GitHub
-When the web application code is changed in the webapp repository, the infrastructure repository should be notified and the infrastructure should be updated.
+When the web application code is changed in the webapp repository, the infrastructure repository should be notified and 
+the infrastructure should be updated.
 
 ## CD Pipeline Requirements (GitHub Actions)
 
@@ -201,7 +339,9 @@ When the web application code is changed in the webapp repository, the infrastru
 1. **Trigger Infrastructure Deployment**: Trigger infrastructure deployment workflow when there is a code change
 
 ### Setup and test GitHub Actions for Infrastructure Repository and Webapp Repository
-A workflow is provided to run the same test using your AWS credentials and region.
+A workflow is provided to run the same test using your AWS credentials and region.  This will suss out environmental 
+problems such as IAM permissions, GitHub secrets, etc. Once that works, we'll move on to getting the repository dispatch 
+workflow working. 
 
 - Workflow: .github/workflows/test-deploy.yml
 - Triggers: workflow_dispatch (manual)
@@ -219,29 +359,66 @@ How to run:
 4. The job will provision, wait for HTTP 200, and destroy by default.
 
 ##### Required GitHub Secrets
-Filling the below bullets out is the goal but first you'll need to create the AWS user for GitHub Actions, create an access key for the user, as explained in the next section.
-- `AWS_ACCESS_KEY_ID`: AWS IAM user access key
-- `AWS_SECRET_ACCESS_KEY`: AWS IAM user secret key
+Filling the below bullets out is the goal but to do so, you'll need to create the AWS user for GitHub Actions, 
+create an access key for the user, as explained in the next section.
+- `AWS_ACCESS_KEY_ID`: <AWS IAM user access key>
+- `AWS_SECRET_ACCESS_KEY`: <AWS IAM user secret key>
 - `AWS_REGION`: us-east-1
-- `AWS_ACCOUNT_ID`: AWS account ID (optional, for S3 bucket naming)
+- `AWS_ACCOUNT_ID`: <AWS account ID>
+- `TF_STATE_BUCKET` = asgardeo-dev-<AWS account ID>-tfstate
+- `TF_LOCK_TABLE` = terraform-locks
+
+XXX> stopped here: next steps 
+Add the additional secrets,
+change the gitactions to do the below.
+XXXX
+
+In the workflow step that runs `terraform init`, pass the same backend flags:
+```
+terraform init \
+-backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+-backend-config="key=global/terraform.tfstate" \
+-backend-config="region=${{ env.AWS_REGION }}" \
+-backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}" \
+-backend-config="encrypt=true" \
+-reconfigure
+```
+XXXX
 
 ###### Steps to setup a user for GitHub Actions
+We'll need to do the following steps to create a secure user for GitHub Actions to use:
+1) create user and make a member of a group
+2) create policy and attach policy to group
+
+**Note**: You could "inline" the policy directly to the group. I chose to create a policy and attach it to the group as somehow I lost the inline policy the last time I did this.  (If the group is removed then the policy is lost, and maybe that's what happened.)
+
+*Create a user and group*
 I vaguely did the steps below. What I did was created user github-deploy.  During that process, I added that user to a new group called asgardeo-admin, and created a policy for the group.
-To create a policy for the group, I copy/pasted main.tf and asked a GPT for a policy file that
-included the permissions needed, and then pasted that into AWS console for the policy. Tip: You can use the 
+To create a policy for the group, I copy/pasted main.tf into a GPT and discussed what kind of policy file it would need.  It told me of the
+permissions needed.  I then pasted that into AWS console for the policy. Tip: You can use the 
 visualize policy editor to see what the policy looks like at a higher level than reading through the policy's json format.
 
 1. Create an IAM user 
-2. Add the user to the `AdministratorAccess` policy (or create a group and attach the policy and user to that group)
+2. Add the user to a group (AWS console lets you create groups in the "create user" workflow). Mine was called asgardeo-admin since the policies will be segmented to that products resources.
 3. Create programmatic access for that user: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html (I later found the "create access key" link on the user's summary page in IAM.)
 4. Create a new access key for the user
 5. Store the access key ID and secret key in GitHub Secrets, and the other secrets mentioned in the previous section.
 
-The policy below could be tightened up with wildcards.  Maybe try that later.
+*Create a policy and attach to group*
+A Customer Managed Policy is your own reusable permission set.
+You create it once, maintain it centrally, and then attach it to multiple users, groups, or roles.  Also it might take a few tries to get the
+policy right and you'd hate to have it deleted because you removed the role.
+
+🧱 Example: Terraform Deployment Policy
+In the AWS Console:
+Go to IAM → Policies → Create policy
+Choose the JSON tab
+Paste in something like the following (or ask your GPT for a policy).
+
+Note: The policy below could be scoped to more specific resources and still use a wildcard.  Maybe I'll try that later as there are some details that need to be addressed to do that:
 * Resource: "*" is used for IAM, EC2, and Elastic Beanstalk because Terraform creates resources with dynamic names and ARNs — a fully scoped ARN is difficult to know in advance.
 * S3 permissions could be further restricted to only the bucket Terraform will create, but since the bucket name is dynamically generated (asgardeo-artifacts-...), wildcard is needed.
 
-Another alternative is to give it full admin access but that would violate minimum privilege principle.
 ```json
 {
     "Version": "2012-10-17",
@@ -273,7 +450,19 @@ Another alternative is to give it full admin access but that would violate minim
                 "ec2:DeleteSecurityGroup",
                 "ec2:DescribeAvailabilityZones",
                 "ec2:DescribeInstances",
-                "ec2:DescribeTags"
+                "ec2:DescribeTags",
+                "ec2:CreateTags",
+                "ec2:DescribeNetworkAcls",
+                "ec2:DescribeVpcEndpoints",
+                "ec2:DescribeVpcAttribute",
+                "ec2:DescribeVpcPeeringConnections",
+                "ec2:DescribeNatGateways",
+                "ec2:DescribeNetworkInterfaces",
+                "ec2:DescribeRegions",
+                "ec2:DeleteTags",
+                "tag:GetResources",
+                "tag:GetTagKeys",
+                "tag:GetTagValues"
             ],
             "Resource": "*"
         },
@@ -286,7 +475,10 @@ Another alternative is to give it full admin access but that would violate minim
                 "s3:ListBucket",
                 "s3:GetObject",
                 "s3:PutObject",
-                "s3:DeleteObject"
+                "s3:DeleteObject",
+                "s3:GetBucketTagging",
+                "s3:PutBucketTagging",
+                "s3:DeleteBucket"
             ],
             "Resource": [
                 "arn:aws:s3:::*"
@@ -305,7 +497,30 @@ Another alternative is to give it full admin access but that would violate minim
                 "elasticbeanstalk:CreateEnvironment",
                 "elasticbeanstalk:DescribeEnvironments",
                 "elasticbeanstalk:TerminateEnvironment",
-                "elasticbeanstalk:UpdateEnvironment"
+                "elasticbeanstalk:UpdateEnvironment",
+                "elasticbeanstalk:AddTags",
+                "elasticbeanstalk:ListAvailableSolutionStacks",
+                "elasticbeanstalk:DescribeConfigurationOptions",
+                "elasticbeanstalk:DescribeConfigurationSettings"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "CloudFormation",
+            "Effect": "Allow",
+            "Action": [
+              "cloudformation:DescribeStacks",
+              "cloudformation:GetTemplate"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "CloudWatchLogs",
+            "Effect": "Allow",
+            "Action": [
+              "logs:CreateLogGroup",
+              "logs:CreateLogStream",
+              "logs:PutLogEvents"
             ],
             "Resource": "*"
         },
@@ -321,14 +536,17 @@ Another alternative is to give it full admin access but that would violate minim
                 "iam:GetRole",
                 "iam:GetInstanceProfile",
                 "iam:ListRoles",
-                "iam:ListInstanceProfiles"
+                "iam:ListInstanceProfiles",
+                "iam:ListRolePolicies",
+                "iam:ListAttachedRolePolicies",
+                "iam:ListInstanceProfilesForRole"
             ],
             "Resource": "*"
         }
     ]
 }
-
 ```
+
 ##### Test the Pipeline
 Let's test that we've got so far:
 * execute the github workflow

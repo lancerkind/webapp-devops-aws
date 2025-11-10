@@ -33,9 +33,28 @@ err() { echo "[test-deploy][ERROR] $*" >&2; }
 
 have_cmd() { command -v "$1" >/dev/null 2>&1; }
 
+# Require remote backend secrets to be set; do not run with local backend
+if [[ -z "${TF_STATE_BUCKET:-}" || -z "${TF_LOCK_TABLE:-}" ]]; then
+  err "Required backend env vars are missing: TF_STATE_BUCKET and/or TF_LOCK_TABLE."
+  err "Skipping Terraform commands. Set github secrets TF_STATE_BUCKET and TF_LOCK_TABLE (and AWS_REGION) per README, then retry."
+  exit 1
+fi
+
 # Initialize and apply
 log "Running terraform init..."
-terraform -chdir="${TF_DIR}" init -upgrade -input=false 1>/dev/null
+INIT_FLAGS=("-upgrade" "-input=false")
+# Configure S3 backend (required)
+BACKEND_REGION="${AWS_REGION:-${TF_VAR_aws_region:-us-east-1}}"
+STATE_KEY_VALUE="${TF_STATE_KEY:-global/terraform.tfstate}"
+INIT_FLAGS+=(
+  "-backend-config=bucket=${TF_STATE_BUCKET}"
+  "-backend-config=key=${STATE_KEY_VALUE}"
+  "-backend-config=region=${BACKEND_REGION}"
+  "-backend-config=dynamodb_table=${TF_LOCK_TABLE}"
+  "-backend-config=encrypt=true"
+)
+log "Using S3 backend bucket=${TF_STATE_BUCKET}, key=${STATE_KEY_VALUE}, region=${BACKEND_REGION}, table=${TF_LOCK_TABLE}"
+terraform -chdir="${TF_DIR}" init "${INIT_FLAGS[@]}" 1>/dev/null
 
 log "Running terraform validate..."
 terraform -chdir="${TF_DIR}" validate
