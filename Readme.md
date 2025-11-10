@@ -369,8 +369,11 @@ create an access key for the user, as explained in the next section.
 - `TF_LOCK_TABLE` = terraform-locks
 
 XXX> stopped here: next steps 
-Add the additional secrets,
-change the gitactions to do the below.
+~~Add the additional secrets,
+change the gitactions to do the below.~~
+- testing manual workflow dispatch
+- I need to udpate the policy for the role used as I have made changes.
+
 XXXX
 
 In the workflow step that runs `terraform init`, pass the same backend flags:
