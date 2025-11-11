@@ -264,40 +264,56 @@ aws dynamodb wait table-exists --table-name "$DDB_TABLE"
 ```
 
 5) Initialize Terraform to use the S3 backend and migrate local state
-- We will pass backend parameters via flags (no code changes required).
+We will pass backend parameters via flags (no code changes required).
+Edit main.tf and add the following so it can know about your intent to use the S3 backend.
+You'll see that I used the bucket name, key, region, and dynamodb table name from the variables we set earlier.
+```
+terraform {
+  backend "s3" {
+    bucket = "asgardeo-dev-<aws account number>-tfstate"
+    key    = "global/terraform.tfstate"
+    region = "us-east-1"
+    dynamodb_table = "terraform-locks"
+    encrypt        = true
+  }
+}
+```
+
+Run a local test. You can migrate your local state to the S3 bucket when it prompts you to do so.
 ```
 cd terraform
-terraform init \
-  -backend-config="bucket=${BUCKET}" \
-  -backend-config="key=${STATE_KEY}" \
-  -backend-config="region=${REGION}" \
-  -backend-config="dynamodb_table=${DDB_TABLE}" \
-  -backend-config="encrypt=true" \
-  -reconfigure
+terraform init
 ```
 
-The above command will configure the terraform backend to use the S3 bucket and DynamoDB table we created.  Then we
-migrate what is on the local drive to the S3 bucket with the `migrate-state` flag.  This is a one-time operation.  If you
-want to use the S3 backend in the future, you can run `terraform init` without the `migrate-state` flag.
-```
-terraform init -migrate-state
-```
-From here on, terraform will use the S3 bucket and DynamoDB table for state management. 
+> Optional: Another way to migrate state
+> If the simple way above didn't cause the migration to happen, then you can run the following command to migrate the state.
+> ```
+> cd terraform
+> terraform init \
+>  -backend-config="bucket=${BUCKET}" \
+>  -backend-config="key=${STATE_KEY}" \
+>  -backend-config="region=${REGION}" \
+>  -backend-config="dynamodb_table=${DDB_TABLE}" \
+>  -backend-config="encrypt=true" \
+>  -reconfigure
+> ```
+>
+> The above command will configure the terraform backend to use the S3 bucket and DynamoDB table we created.  Then we
+> migrate what is on the local drive to the S3 bucket with the `migrate-state` flag.  This is a one-time operation.  If you
+> want to use the S3 backend in the future, you can run `terraform init` without the `migrate-state` flag.
+> ```
+> terraform init -migrate-state
+> ```
+> From here on, terraform will use the S3 bucket and DynamoDB table for state management. 
 
 6) Verify it worked
-Ask terraform:
-```bash
-terraform state pull | head -n 10
-```
-And you'll get something like the below.  Notice the artifacts_bucket_name's value.  This is the name of the S3 bucket.
-https://developer.hashicorp.com/terraform/language/backend/s3
-
-XXX This didn't work for me.
-###### State object exists in S3
+One option is to see if the state file is in your s3 bucket.  Running the following will return and error if the state file isn't there.
 ```aws s3 ls s3://$BUCKET/$(dirname "$STATE_KEY")/```
-XXX This didn't work for me.
+You can run the following if you want to see the filename with your own eyes:
+```aws s3 ls s3://```
 
-###### Lock table is active
+
+Another option is to run the following to see if the Lock table is active. It will return "Active" if the lock is in place.
 ```aws dynamodb describe-table --table-name "$DDB_TABLE" --query 'Table.TableStatus'```
 
 7) Test locking (optional but recommended)
@@ -372,8 +388,7 @@ XXX> stopped here: next steps
 ~~Add the additional secrets,
 change the gitactions to do the below.~~
 - testing manual workflow dispatch
-- I need to udpate the policy for the role used as I have made changes.
-
+- update all the calls to terraform in test_deploy.sh to use the same backend config: terraform -chdir="${TF_DIR}" init "${INIT_FLAGS[@]}" 1>/dev/null
 XXXX
 
 In the workflow step that runs `terraform init`, pass the same backend flags:
@@ -458,6 +473,7 @@ Note: The policy below could be scoped to more specific resources and still use 
                 "ec2:DescribeNetworkAcls",
                 "ec2:DescribeVpcEndpoints",
                 "ec2:DescribeVpcAttribute",
+                "ec2:ModifyVpcAttribute",
                 "ec2:DescribeVpcPeeringConnections",
                 "ec2:DescribeNatGateways",
                 "ec2:DescribeNetworkInterfaces",
@@ -481,7 +497,9 @@ Note: The policy below could be scoped to more specific resources and still use 
                 "s3:DeleteObject",
                 "s3:GetBucketTagging",
                 "s3:PutBucketTagging",
-                "s3:DeleteBucket"
+                "s3:DeleteBucket",
+                "s3:GetBucketPolicy",
+                "s3:PutBucketPolicy"
             ],
             "Resource": [
                 "arn:aws:s3:::*"
