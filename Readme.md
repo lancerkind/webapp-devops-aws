@@ -435,7 +435,8 @@ Paste in something like the following (or ask your GPT for a policy).
 
 Note: The policy below could be scoped to more specific resources and still use a wildcard.  Maybe I'll try that later as there are some details that need to be addressed to do that:
 * Resource: "*" is used for IAM, EC2, and Elastic Beanstalk because Terraform creates resources with dynamic names and ARNs — a fully scoped ARN is difficult to know in advance.
-* S3 permissions could be further restricted to only the bucket Terraform will create, but since the bucket name is dynamically generated (asgardeo-artifacts-...), wildcard is needed.
+* S3 permissions should be further restricted to only the bucket Terraform will create.  Since the bucket name is dynamically generated (asgardeo-artifacts-...), a wildcard is needed.
+* This demo isn't using load balancing so permissions to manage an ELB isn't in the below.
 
 ```json
 {
@@ -457,8 +458,10 @@ Note: The policy below could be scoped to more specific resources and still use 
                 "ec2:DeleteInternetGateway",
                 "ec2:CreateRouteTable",
                 "ec2:AssociateRouteTable",
+                "ec2:DisassociateRouteTable",
                 "ec2:DescribeRouteTables",
                 "ec2:DeleteRouteTable",
+                "ec2:CreateRoute",
                 "ec2:CreateSecurityGroup",
                 "ec2:DescribeSecurityGroups",
                 "ec2:AuthorizeSecurityGroupIngress",
@@ -490,7 +493,6 @@ Note: The policy below could be scoped to more specific resources and still use 
             "Effect": "Allow",
             "Action": [
                 "s3:CreateBucket",
-                "s3:PutBucketVersioning",
                 "s3:ListBucket",
                 "s3:GetObject",
                 "s3:PutObject",
@@ -499,7 +501,30 @@ Note: The policy below could be scoped to more specific resources and still use 
                 "s3:PutBucketTagging",
                 "s3:DeleteBucket",
                 "s3:GetBucketPolicy",
-                "s3:PutBucketPolicy"
+                "s3:PutBucketPolicy",
+                "s3:GetObjectVersion",
+                "s3:ListBucketVersions",
+                "s3:PutBucketVersioning",
+                "s3:GetBucketVersioning",
+                "s3:GetBucketWebsite",
+                "s3:PutBucketWebsite",
+                "s3:GetBucketAcl",
+                "s3:PutBucketAcl",
+                "s3:GetBucketCORS",
+                "s3:PutBucketCORS",
+                "s3:GetAccelerateConfiguration",
+                "s3:PutAccelerateConfiguration",
+                "s3:GetLifecycleConfiguration",
+                "s3:PutLifecycleConfiguration",
+                "s3:GetReplicationConfiguration",
+                "s3:PutReplicationConfiguration",
+                "s3:GetBucketLocation",
+                "s3:ListBucketMultipartUploads",
+                "s3:AbortMultipartUpload",
+                "s3:ListMultipartUploadParts",
+                "s3:GetBucketRequestPayment",
+                "s3:PutBucketRequestPayment",
+                "s3:PutBucketEncryptionConfiguration"
             ],
             "Resource": [
                 "arn:aws:s3:::*"
@@ -522,7 +547,17 @@ Note: The policy below could be scoped to more specific resources and still use 
                 "elasticbeanstalk:AddTags",
                 "elasticbeanstalk:ListAvailableSolutionStacks",
                 "elasticbeanstalk:DescribeConfigurationOptions",
-                "elasticbeanstalk:DescribeConfigurationSettings"
+                "elasticbeanstalk:DescribeConfigurationSettings",
+                "elasticbeanstalk:DescribeEnvironmentResources",
+                "elasticbeanstalk:RetrieveEnvironmentInfo",
+                "elasticbeanstalk:CreateStorageLocation",
+                "elasticbeanstalk:ListTagsForResource",
+                "elasticbeanstalk:DescribeEvents",
+                "elasticbeanstalk:RequestEnvironmentInfo",
+                "elasticbeanstalk:RebuildEnvironment",
+                "elasticbeanstalk:DescribeInstancesHealth",
+                "elasticbeanstalk:ValidateConfigurationSettings",
+                "elasticbeanstalk:DescribePlatformVersion"
             ],
             "Resource": "*"
         },
@@ -531,7 +566,10 @@ Note: The policy below could be scoped to more specific resources and still use 
             "Effect": "Allow",
             "Action": [
               "cloudformation:DescribeStacks",
-              "cloudformation:GetTemplate"
+              "cloudformation:GetTemplate",
+              "cloudformation:CreateStack",
+              "cloudformation:UpdateStack",
+              "cloudformation:DeleteStack"
             ],
             "Resource": "*"
         },
@@ -539,6 +577,7 @@ Note: The policy below could be scoped to more specific resources and still use 
             "Sid": "CloudWatchLogs",
             "Effect": "Allow",
             "Action": [
+              "cloudwatch:PutMetricData",
               "logs:CreateLogGroup",
               "logs:CreateLogStream",
               "logs:PutLogEvents"
@@ -550,10 +589,16 @@ Note: The policy below could be scoped to more specific resources and still use 
             "Effect": "Allow",
             "Action": [
                 "iam:CreateRole",
+                "iam:DeleteRole",
+                "iam:DetachRolePolicy",
                 "iam:AttachRolePolicy",
+                "iam:PutRolePolicy",
+                "iam:DeleteRolePolicy",
                 "iam:PassRole",
                 "iam:CreateInstanceProfile",
+                "iam:DeleteInstanceProfile",
                 "iam:AddRoleToInstanceProfile",
+                "iam:RemoveRoleFromInstanceProfile",
                 "iam:GetRole",
                 "iam:GetInstanceProfile",
                 "iam:ListRoles",
@@ -563,7 +608,38 @@ Note: The policy below could be scoped to more specific resources and still use 
                 "iam:ListInstanceProfilesForRole"
             ],
             "Resource": "*"
-        }
+        },
+        {
+            "Sid": "DynamoDB",
+            "Effect": "Allow",
+            "Action": [
+              "dynamodb:DescribeTable",
+              "dynamodb:PutItem",
+              "dynamodb:GetItem",
+              "dynamodb:DeleteItem",
+              "dynamodb:UpdateItem"
+              ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "KeyManagementService",
+            "Effect": "Allow",
+            "Action": [
+            "kms:Decrypt",
+            "kms:Encrypt",
+            "kms:GenerateDataKey",
+            "kms:DescribeKey"
+            ],
+            "Resource": "*"
+        },
+      {
+        "Sid": "MiscHelpers",
+        "Effect": "Allow",
+        "Action": [
+          "sts:GetCallerIdentity"
+          ],
+        "Resource": "*"
+      }
     ]
 }
 ```
@@ -719,6 +795,28 @@ Notes on costs and cleanup:
 
 **Issue**: Deployment workflow can't checkout webapp repo
 - **Solution**: If webapp is private, add PAT to infrastructure repo secrets as `WEBAPP_REPO_TOKEN` and use it in checkout step
+
+**Issue**: Github action gets "Error: Error acquiring the state lock"
+- **Solution**: Congratulations! You've got terraform connecting shared state in AWS! So you're almost there. You need to adjust the policy/permissions that it mentions needing. (In this case see PutItem and GetItem in the error message below.)
+[test-deploy] Running terraform plan...
+╷
+│ Error: Error acquiring the state lock
+│
+│ Error message: operation error DynamoDB: PutItem, https response error
+│ StatusCode: 400, RequestID:
+│ T1QJ0BB12M0HKAK1OT271M6NM3VV4KQNSO5AEMVJF66Q9ASUAAJG, api error
+│ AccessDeniedException: User: arn:aws:iam::905418390803:user/github-deploy
+│ is not authorized to perform: **dynamodb:PutItem** on resource:
+│ arn:aws:dynamodb:***:905418390803:table/*** because no
+│ identity-based policy allows the dynamodb:PutItem action
+│ Unable to retrieve item from DynamoDB table "***": operation
+│ error DynamoDB: GetItem, https response error StatusCode: 400, RequestID:
+│ 11F47F6GGTL6G4UURMPVRG5A9RVV4KQNSO5AEMVJF66Q9ASUAAJG, api error
+│ AccessDeniedException: User: arn:aws:iam::905418390803:user/github-deploy
+│ is not authorized to perform: **dynamodb:GetItem** on resource:
+│ arn:aws:dynamodb:***:905418390803:table/*** because no
+│ identity-based policy allows the dynamodb:GetItem action
+│
 
 ---
 # Resources
