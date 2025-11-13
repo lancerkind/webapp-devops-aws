@@ -433,214 +433,230 @@ Go to IAM → Policies → Create policy
 Choose the JSON tab
 Paste in something like the following (or ask your GPT for a policy).
 
-Note: The policy below could be scoped to more specific resources and still use a wildcard.  Maybe I'll try that later as there are some details that need to be addressed to do that:
+> Sidebar: the best way to create a policy file for terraform.
+> The easiest way to finish this quickly is to give the policy Adim privliges to all resources.
+> 
+> The most *secure way* is to create a policy that only allows terraform to create resources it needs.
+> Here is a process for doing that:
+> 1. Create a policy that allows terraform to create all resources it needs (the easiest way).
+> 2. Look at XYZ to get a list of resources it needs. Then create a policy that allows terraform to create only those resources.  <XXX explain this better
+> 3. Attach the policy created in step 1 to the user created in step 2.
+
+Note: The policy below could be scoped to more specific resources through the use of wildcarding.  Maybe I'll try that later as there are some details that need to be addressed to do that:
 * Resource: "*" is used for IAM, EC2, and Elastic Beanstalk because Terraform creates resources with dynamic names and ARNs — a fully scoped ARN is difficult to know in advance.
 * S3 permissions should be further restricted to only the bucket Terraform will create.  Since the bucket name is dynamically generated (asgardeo-artifacts-...), a wildcard is needed.
 * This demo isn't using load balancing so permissions to manage an ELB isn't in the below.
 
 ```json
 {
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "EC2Networking",
-            "Effect": "Allow",
-            "Action": [
-                "ec2:CreateVpc",
-                "ec2:DescribeVpcs",
-                "ec2:DeleteVpc",
-                "ec2:CreateSubnet",
-                "ec2:DescribeSubnets",
-                "ec2:DeleteSubnet",
-                "ec2:CreateInternetGateway",
-                "ec2:AttachInternetGateway",
-                "ec2:DescribeInternetGateways",
-                "ec2:DeleteInternetGateway",
-                "ec2:CreateRouteTable",
-                "ec2:AssociateRouteTable",
-                "ec2:DisassociateRouteTable",
-                "ec2:DescribeRouteTables",
-                "ec2:DeleteRouteTable",
-                "ec2:CreateRoute",
-                "ec2:CreateSecurityGroup",
-                "ec2:DescribeSecurityGroups",
-                "ec2:AuthorizeSecurityGroupIngress",
-                "ec2:AuthorizeSecurityGroupEgress",
-                "ec2:RevokeSecurityGroupIngress",
-                "ec2:RevokeSecurityGroupEgress",
-                "ec2:DeleteSecurityGroup",
-                "ec2:DescribeAvailabilityZones",
-                "ec2:DescribeInstances",
-                "ec2:DescribeTags",
-                "ec2:CreateTags",
-                "ec2:DescribeNetworkAcls",
-                "ec2:DescribeVpcEndpoints",
-                "ec2:DescribeVpcAttribute",
-                "ec2:ModifyVpcAttribute",
-                "ec2:DescribeVpcPeeringConnections",
-                "ec2:DescribeNatGateways",
-                "ec2:DescribeNetworkInterfaces",
-                "ec2:DescribeRegions",
-                "ec2:DeleteTags",
-                "tag:GetResources",
-                "tag:GetTagKeys",
-                "tag:GetTagValues"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "S3Buckets",
-            "Effect": "Allow",
-            "Action": [
-                "s3:CreateBucket",
-                "s3:ListBucket",
-                "s3:GetObject",
-                "s3:PutObject",
-                "s3:DeleteObject",
-                "s3:GetBucketTagging",
-                "s3:PutBucketTagging",
-                "s3:DeleteBucket",
-                "s3:GetBucketPolicy",
-                "s3:PutBucketPolicy",
-                "s3:GetObjectVersion",
-                "s3:ListBucketVersions",
-                "s3:PutBucketVersioning",
-                "s3:GetBucketVersioning",
-                "s3:GetBucketWebsite",
-                "s3:PutBucketWebsite",
-                "s3:GetBucketAcl",
-                "s3:PutBucketAcl",
-                "s3:GetBucketCORS",
-                "s3:PutBucketCORS",
-                "s3:GetAccelerateConfiguration",
-                "s3:PutAccelerateConfiguration",
-                "s3:GetLifecycleConfiguration",
-                "s3:PutLifecycleConfiguration",
-                "s3:GetReplicationConfiguration",
-                "s3:PutReplicationConfiguration",
-                "s3:GetBucketLocation",
-                "s3:ListBucketMultipartUploads",
-                "s3:AbortMultipartUpload",
-                "s3:ListMultipartUploadParts",
-                "s3:GetBucketRequestPayment",
-                "s3:PutBucketRequestPayment",
-                "s3:PutBucketEncryptionConfiguration"
-            ],
-            "Resource": [
-                "arn:aws:s3:::*"
-            ]
-        },
-        {
-            "Sid": "ElasticBeanstalk",
-            "Effect": "Allow",
-            "Action": [
-                "elasticbeanstalk:CreateApplication",
-                "elasticbeanstalk:DescribeApplications",
-                "elasticbeanstalk:DeleteApplication",
-                "elasticbeanstalk:CreateApplicationVersion",
-                "elasticbeanstalk:DescribeApplicationVersions",
-                "elasticbeanstalk:DeleteApplicationVersion",
-                "elasticbeanstalk:CreateEnvironment",
-                "elasticbeanstalk:DescribeEnvironments",
-                "elasticbeanstalk:TerminateEnvironment",
-                "elasticbeanstalk:UpdateEnvironment",
-                "elasticbeanstalk:AddTags",
-                "elasticbeanstalk:ListAvailableSolutionStacks",
-                "elasticbeanstalk:DescribeConfigurationOptions",
-                "elasticbeanstalk:DescribeConfigurationSettings",
-                "elasticbeanstalk:DescribeEnvironmentResources",
-                "elasticbeanstalk:RetrieveEnvironmentInfo",
-                "elasticbeanstalk:CreateStorageLocation",
-                "elasticbeanstalk:ListTagsForResource",
-                "elasticbeanstalk:DescribeEvents",
-                "elasticbeanstalk:RequestEnvironmentInfo",
-                "elasticbeanstalk:RebuildEnvironment",
-                "elasticbeanstalk:DescribeInstancesHealth",
-                "elasticbeanstalk:ValidateConfigurationSettings",
-                "elasticbeanstalk:DescribePlatformVersion"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "CloudFormation",
-            "Effect": "Allow",
-            "Action": [
-              "cloudformation:DescribeStacks",
-              "cloudformation:GetTemplate",
-              "cloudformation:CreateStack",
-              "cloudformation:UpdateStack",
-              "cloudformation:DeleteStack"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "CloudWatchLogs",
-            "Effect": "Allow",
-            "Action": [
-              "cloudwatch:PutMetricData",
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:PutLogEvents"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "IAMRoles",
-            "Effect": "Allow",
-            "Action": [
-                "iam:CreateRole",
-                "iam:DeleteRole",
-                "iam:DetachRolePolicy",
-                "iam:AttachRolePolicy",
-                "iam:PutRolePolicy",
-                "iam:DeleteRolePolicy",
-                "iam:PassRole",
-                "iam:CreateInstanceProfile",
-                "iam:DeleteInstanceProfile",
-                "iam:AddRoleToInstanceProfile",
-                "iam:RemoveRoleFromInstanceProfile",
-                "iam:GetRole",
-                "iam:GetInstanceProfile",
-                "iam:ListRoles",
-                "iam:ListInstanceProfiles",
-                "iam:ListRolePolicies",
-                "iam:ListAttachedRolePolicies",
-                "iam:ListInstanceProfilesForRole"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "DynamoDB",
-            "Effect": "Allow",
-            "Action": [
-              "dynamodb:DescribeTable",
-              "dynamodb:PutItem",
-              "dynamodb:GetItem",
-              "dynamodb:DeleteItem",
-              "dynamodb:UpdateItem"
-              ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "KeyManagementService",
-            "Effect": "Allow",
-            "Action": [
-            "kms:Decrypt",
-            "kms:Encrypt",
-            "kms:GenerateDataKey",
-            "kms:DescribeKey"
-            ],
-            "Resource": "*"
-        },
-      {
-        "Sid": "MiscHelpers",
-        "Effect": "Allow",
-        "Action": [
-          "sts:GetCallerIdentity"
-          ],
-        "Resource": "*"
-      }
-    ]
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EC2Networking",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateVpc",
+        "ec2:DescribeVpcs",
+        "ec2:DeleteVpc",
+        "ec2:CreateSubnet",
+        "ec2:Describe*",
+        "ec2:ModifyInstance*",
+        "ec2:DeleteSubnet",
+        "ec2:CreateInternetGateway",
+        "ec2:AttachInternetGateway",
+        "ec2:DetachInternetGateway",
+        "ec2:DeleteInternetGateway",
+        "ec2:DeleteVpc",
+        "ec2:DeleteSubnet",
+        "ec2:DeleteRouteTable",
+        "ec2:DeleteRoute",
+        "ec2:DeleteNetworkAcl*",
+        "ec2:CreateNetworkAcl*",
+        "ec2:DeleteNatGateway",
+        "ec2:CreateNatGateway",
+        "ec2:ReleaseAddress",
+        "ec2:AssociateAddress",
+        "ec2:DisassociateAddress",
+        "ec2:AllocateAddress",
+        "ec2:AssociateRoute*",
+        "ec2:DisassociateRoute*",
+        "ec2:DeleteRoute*",
+        "ec2:CreateRoute*",
+        "ec2:AuthorizeSecurityGroup*",
+        "ec2:RevokeSecurityGroup*",
+        "ec2:DescribeAvailabilityZones",
+        "ec2:CreateTags",
+        "ec2:ModifyVpc*",
+        "ec2:DeleteTag*",
+        "tag:GetResources",
+        "tag:GetTag*",
+        "ec2:Describe*",
+        "ec2:CreateVpc",
+        "ec2:DeleteVpc",
+        "ec2:ModifySubnetAttribute",
+        "ec2:ReplaceRoute*",
+        "ec2:ModifyNetwork*",
+        "ec2:CreateSecurityGroup*",
+        "ec2:DeleteSecurityGroup*",
+        "ec2:ModifySecurityGroup*",
+        "ec2:DeleteLaunchTemplate",
+        "ec2:DeleteLaunchTemplate",
+        "ec2:TerminateInstances",
+        "ec2:RunInstances",
+        "ec2:CreateLaunchTemplate",
+        "ec2:DeleteLaunchTemplate"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "S3Buckets",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject*",
+        "s3:PutObject*",
+        "s3:DeleteObject*",
+        "s3:PutObject*",
+        "s3:GetBucket*",
+        "s3:DeleteBucket*",
+        "s3:ListBucket*",
+        "s3:GetAccelerateConfiguration",
+        "s3:PutAccelerateConfiguration",
+        "s3:GetLifecycleConfiguration",
+        "s3:PutLifecycleConfiguration",
+        "s3:GetReplicationConfiguration",
+        "s3:PutReplicationConfiguration",
+        "s3:ListBucketMultipartUploads",
+        "s3:AbortMultipartUpload",
+        "s3:ListMultipartUploadParts",
+        "s3:PutBucket*",
+        "s3:GetBucket*",
+        "s3:DeleteBucket*",
+        "s3:ListBucket*",
+        "s3:CreateBucket*",
+        "s3:GetEncryptionConfiguration",
+        "s3:PutEncryptionConfiguration"
+      ],
+      "Resource": [
+        "arn:aws:s3:::*"
+      ]
+    },
+    {
+      "Sid": "ElasticBeanstalk",
+      "Effect": "Allow",
+      "Action": [
+        "elasticbeanstalk:*",
+        "autoscaling:*",
+        "elasticloadbalancing:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CloudFormation",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:DescribeStacks",
+        "cloudformation:GetTemplate",
+        "cloudformation:CreateStack",
+        "cloudformation:UpdateStack",
+        "cloudformation:DeleteStack",
+        "cloudformation:DescribeStack*",
+        "cloudformation:ValidateTemplate",
+        "cloudformation:SetStackPolicy",
+        "cloudformation:CreateChangeSet",
+        "cloudformation:DeleteChangeSet",
+        "cloudformation:DescribeChangeSet",
+        "cloudformation:ExecuteChangeSet",
+        "cloudformation:ListStack*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CloudWatchLogs",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:PutMetricData",
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams",
+        "cloudwatch:PutMetricAlarm",
+        "cloudwatch:DeleteAlarms",
+        "cloudwatch:DescribeAlarms"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SNS",
+      "Effect": "Allow",
+      "Action": [
+        "sns:CreateTopic",
+        "sns:DeleteTopic",
+        "sns:Subscribe",
+        "sns:Unsubscribe",
+        "sns:Publish"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "IAMRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:DetachRolePolicy",
+        "iam:AttachRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:PassRole",
+        "iam:CreateInstanceProfile",
+        "iam:DeleteInstanceProfile",
+        "iam:AddRoleToInstanceProfile",
+        "iam:RemoveRoleFromInstanceProfile",
+        "iam:GetRole",
+        "iam:GetInstanceProfile",
+        "iam:ListRoles",
+        "iam:ListInstanceProfiles",
+        "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListInstanceProfilesForRole",
+        "iam:PassRole"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DynamoDB",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:DescribeTable",
+        "dynamodb:PutItem",
+        "dynamodb:GetItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:Scan"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "KeyManagementService",
+      "Effect": "Allow",
+      "Action": [
+        "kms:Decrypt",
+        "kms:Encrypt",
+        "kms:GenerateDataKey",
+        "kms:DescribeKey"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "MiscHelpers",
+      "Effect": "Allow",
+      "Action": [
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    }
+  ]
 }
 ```
 
