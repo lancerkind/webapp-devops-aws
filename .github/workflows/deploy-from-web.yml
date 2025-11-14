@@ -67,10 +67,10 @@ jobs:
       - name: Package webapp
         run: |
           cd webapp-source/webapp
-          rm -f ../webapp.zip
+          rm -f ../../webapp.zip
           # Package without parent directory (EB requirement)
-          zip -r ../webapp.zip * -x "*.git*" -x "node_modules/*" -x ".github/*" -x "*.md"
-          cd ..
+          zip -r ../../webapp.zip * -x "*.git*" -x "node_modules/*" -x ".github/*" -x "*.md"
+          cd ../..
           ls -lh webapp.zip
           echo "Packaged webapp from SHA: ${{ steps.resolved_sha.outputs.sha }}"
 
