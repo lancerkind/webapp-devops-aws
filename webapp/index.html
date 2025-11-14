@@ -27,8 +27,7 @@
       <p class="ok">Status: Healthy</p>
       <p>Welcome! This is a minimal static HTML app used to validate the CI/CD pipeline and infrastructure.</p>
       <div class="meta">
-        <p>Build: <span class="mono" id="build">v0</span></p>
-        <p>Deployed on: <span class="mono" id="ts"></span></p>
+        <p>Build: <span class="mono" id="build">v_from_infrastructure_</span></p>
       </div>
     </div>
   </main>
@@ -38,7 +37,6 @@
   <script>
     const d = new Date();
     document.getElementById('year').textContent = d.getFullYear();
-    document.getElementById('ts').textContent = d.toISOString();
   </script>
 </body>
 </html>
