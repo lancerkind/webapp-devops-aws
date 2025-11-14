@@ -86,11 +86,11 @@ jobs:
 
       - name: Terraform Plan
         working-directory: ./terraform
-        run: terraform plan -input=false -out=tfplan -var "commit_sha=${{ steps.resolved_sha.outputs.sha }}"
+        run: terraform plan -input=false -out=tfplan -var="commit_sha=${{ steps.resolved_sha.outputs.sha }}"
 
       - name: Terraform Apply
         working-directory: ./terraform
-        run: terraform apply -input=false -auto-approve tfplan -var "commit_sha=${{ steps.resolved_sha.outputs.sha }}"
+        run: terraform apply -input=false -auto-approve tfplan -var="commit_sha=${{ steps.resolved_sha.outputs.sha }}"
 
       - name: Read Terraform outputs
         id: tf_outputs
