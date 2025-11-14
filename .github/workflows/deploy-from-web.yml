@@ -66,7 +66,7 @@ jobs:
 
       - name: Package webapp
         run: |
-          cd webapp-source
+          cd webapp-source/webapp
           rm -f ../webapp.zip
           # Package without parent directory (EB requirement)
           zip -r ../webapp.zip * -x "*.git*" -x "node_modules/*" -x ".github/*" -x "*.md"
