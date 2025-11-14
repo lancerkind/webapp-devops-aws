@@ -46,7 +46,7 @@ jobs:
             echo "sha=${{ github.event.client_payload.webapp_sha }}" >> $GITHUB_OUTPUT
           else
             echo "repo=${{ inputs.webapp_repo }}" >> $GITHUB_OUTPUT
-            echo "ref=${{ inputs.webapp_ref || 'main' }}" >> $GITHUB_OUTPUT
+           # echo "ref=${{ inputs.webapp_ref || 'main' }}" >> $GITHUB_OUTPUT  # this line is superfluous.
             echo "sha=manual" >> $GITHUB_OUTPUT
           fi
 
@@ -86,11 +86,11 @@ jobs:
 
       - name: Terraform Plan
         working-directory: ./terraform
-        run: terraform plan -input=false -out=tfplan
+        run: terraform plan -input=false -out=tfplan -var "commit_sha=${{ steps.resolved_sha.outputs.sha }}"
 
       - name: Terraform Apply
         working-directory: ./terraform
-        run: terraform apply -input=false -auto-approve tfplan
+        run: terraform apply -input=false -auto-approve tfplan -var "commit_sha=${{ steps.resolved_sha.outputs.sha }}"
 
       - name: Read Terraform outputs
         id: tf_outputs
