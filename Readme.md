@@ -674,14 +674,14 @@ Let's run the test workflow:
     - skip_destroy: default false (will destroy after test)
 4. The job will provision, wait for HTTP 200, and destroy by default.
 
-Count to 20 after clicking the "Run workflow" button, and you'll see the job run.
-
+Count to 20 after clicking the "Run workflow" button, and you'll see the job run.  If you can create and destroy, and update an existing
+resource, then you're good to go to the next step.
 
 ##### Setup GitHub Actions
 
 **Step 1: Create GitHub Personal Access Token (PAT)**
 
-1. Go to GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
+1. In the infrastructure repository you've been working in, go to GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
 2. Click "Generate new token" (classic)
 3. Name it: `infrastructure-repo-dispatch`
 4. Set expiration as needed
