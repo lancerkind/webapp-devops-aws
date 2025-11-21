@@ -31,12 +31,22 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # Build the artifact where Terraform expects it (repo root as webapp.zip)
-      - name: Package application for Terraform
+      # Build artifacts where Terraform expects them (repo root)
+      - name: Package webapp for Terraform
         run: |
           rm -f webapp.zip
-          (cd webapp && zip -r ../webapp.zip .)
+          (cd webapp && zip -r ../webapp.zip . -x "*.git*" -x "node_modules/*" -x ".github/*" -x "*.md")
           ls -lh webapp.zip
+
+      - name: Package service for Terraform (if present)
+        run: |
+          if [ -d "service" ]; then
+            rm -f service.zip
+            (cd service && zip -r ../service.zip . -x "*.git*" -x "node_modules/*" -x ".github/*" -x "*.md")
+            ls -lh service.zip
+          else
+            echo "Service directory not found in this repository. If deploying the service, use the 'Deploy from Webapp Update' workflow to package from the external webapp repo." >&2
+          fi
 
       - name: Terraform Init (S3 backend)
         working-directory: ./terraform
@@ -68,7 +78,7 @@ jobs:
           echo "bucket=$(terraform output -raw artifacts_bucket_name)" >> $GITHUB_OUTPUT
           echo "url=$(terraform output -raw beanstalk_environment_url)" >> $GITHUB_OUTPUT
 
-      # Removed AWS CLI deployment steps; Terraform handles versioning and environment update
+      # Terraform handles versioning and environment update
 
       - name: Output environment URL
         run: |

@@ -74,6 +74,20 @@ jobs:
           ls -lh webapp.zip
           echo "Packaged webapp from SHA: ${{ steps.resolved_sha.outputs.sha }}"
 
+      - name: Package service
+        run: |
+          if [ ! -d "webapp-source/service" ]; then
+            echo "service directory not found in the external webapp repository" 1>&2
+            exit 1
+          fi
+          cd webapp-source/service
+          rm -f ../../service.zip
+          # Package without parent directory
+          zip -r ../../service.zip * -x "*.git*" -x "node_modules/*" -x ".github/*" -x "*.md"
+          cd ../..
+          ls -lh service.zip
+          echo "Packaged service from SHA: ${{ steps.resolved_sha.outputs.sha }}"
+
       - name: Terraform Init (S3 backend)
         working-directory: ./terraform
         run: |

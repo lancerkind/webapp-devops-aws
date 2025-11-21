@@ -98,9 +98,11 @@ resource "aws_route_table_association" "public_assoc" {
 }
 
 # Security Group
-resource "aws_security_group" "asgardeo_security_group" {
-  name        = "${local.name_prefix}-sg"
-  description = "Allow HTTP inbound and all outbound"
+# Security Groups
+# Webapp SG (public HTTP)
+resource "aws_security_group" "webapp_sg" {
+  name        = "${local.name_prefix}-webapp-sg"
+  description = "Allow public HTTP for webapp"
   vpc_id      = aws_vpc.asgardeo_vpc.id
 
   ingress {
@@ -117,7 +119,54 @@ resource "aws_security_group" "asgardeo_security_group" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(local.tags, { Name = "${local.name_prefix}-sg" })
+  tags = merge(local.tags, { Name = "${local.name_prefix}-webapp-sg" })
+}
+
+# Service Load Balancer SG (internal; allow only from webapp SG)
+resource "aws_security_group" "service_elb_sg" {
+  name        = "${local.name_prefix}-service-elb-sg"
+  description = "Internal ALB for time-service; allow from webapp SG on 5183"
+  vpc_id      = aws_vpc.asgardeo_vpc.id
+
+  ingress {
+    from_port       = 5183
+    to_port         = 5183
+    protocol        = "tcp"
+    security_groups = [aws_security_group.webapp_sg.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.tags, { Name = "${local.name_prefix}-service-elb-sg" })
+}
+
+# Service Instance SG (allow only from its ALB on 5183)
+resource "aws_security_group" "service_instance_sg" {
+  name        = "${local.name_prefix}-service-instance-sg"
+  description = "Allow traffic from service ALB on 5183"
+  vpc_id      = aws_vpc.asgardeo_vpc.id
+
+  ingress {
+    # ALB forwards to instance target port (default 80 on EB)
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.service_elb_sg.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.tags, { Name = "${local.name_prefix}-service-instance-sg" })
 }
 
 # IAM roles and instance profile
@@ -208,13 +257,29 @@ resource "aws_s3_object" "webapp_bundle" {
   etag   = filemd5("${path.module}/../webapp.zip")
 }
 
-# Application Version
+## Service bundle (time-service)
+resource "aws_s3_object" "service_bundle" {
+  bucket = aws_s3_bucket.artifacts.id
+  key    = "service-${var.commit_sha}.zip"
+  source = "${path.module}/../service.zip"
+  etag   = filemd5("${path.module}/../service.zip")
+}
+
+# Application Versions
 resource "aws_elastic_beanstalk_application_version" "asgardeo_app_version" {
   name        = "v-${var.commit_sha}"
   application = aws_elastic_beanstalk_application.asgardeo_application.name
   description = "Version for commit ${var.commit_sha}"
   bucket      = aws_s3_bucket.artifacts.id
   key         = aws_s3_object.webapp_bundle.key
+}
+
+resource "aws_elastic_beanstalk_application_version" "service_app_version" {
+  name        = "service-v-${var.commit_sha}"
+  application = aws_elastic_beanstalk_application.asgardeo_application.name
+  description = "Service version for commit ${var.commit_sha}"
+  bucket      = aws_s3_bucket.artifacts.id
+  key         = aws_s3_object.service_bundle.key
 }
 
 # Elastic Beanstalk Environment
@@ -246,7 +311,7 @@ resource "aws_elastic_beanstalk_environment" "asgardeo_environment" {
   setting {
     namespace = "aws:autoscaling:launchconfiguration"
     name      = "SecurityGroups"
-    value     = aws_security_group.asgardeo_security_group.id
+    value     = aws_security_group.webapp_sg.id
   }
 
   setting {
@@ -268,5 +333,129 @@ resource "aws_elastic_beanstalk_environment" "asgardeo_environment" {
     value     = aws_iam_role.beanstalk_service_role.name
   }
 
+  # Inject SERVICE_URL pointing to the internal ALB DNS of the service environment on port 5183
+  # Will be populated after service env is created/updated; Terraform will handle ordering via implicit reference
+  setting {
+    namespace = "aws:elasticbeanstalk:application:environment"
+    name      = "SERVICE_URL"
+    value     = "http://${aws_elastic_beanstalk_environment.asgardeo_service_environment.cname}:5183"
+  }
+
+  # Ensure app binds to expected internal port 5173 (EB proxy forwards from 80)
+  setting {
+    namespace = "aws:elasticbeanstalk:application:environment"
+    name      = "PORT"
+    value     = "5173"
+  }
+
   tags = local.tags
+}
+
+# Elastic Beanstalk Environment for time-service (LoadBalanced with internal ALB)
+resource "aws_elastic_beanstalk_environment" "asgardeo_service_environment" {
+  name                = "asgardeo-service-env"
+  application         = aws_elastic_beanstalk_application.asgardeo_application.name
+  solution_stack_name = "64bit Amazon Linux 2023 v6.6.6 running Node.js 22"
+  version_label       = aws_elastic_beanstalk_application_version.service_app_version.name
+
+  # Make this a load-balanced environment with internal ALB
+  setting {
+    namespace = "aws:elasticbeanstalk:environment"
+    name      = "EnvironmentType"
+    value     = "LoadBalanced"
+  }
+
+  # Internal ALB scheme for private access within VPC
+  setting {
+    namespace = "aws:elbv2:loadbalancer"
+    name      = "Scheme"
+    value     = "internal"
+  }
+
+  # Assign VPC and subnets
+  setting {
+    namespace = "aws:ec2:vpc"
+    name      = "VPCId"
+    value     = aws_vpc.asgardeo_vpc.id
+  }
+
+  setting {
+    namespace = "aws:ec2:vpc"
+    name      = "Subnets"
+    value     = join(",", [for s in aws_subnet.public : s.id])
+  }
+
+  setting {
+    namespace = "aws:ec2:vpc"
+    name      = "ELBSubnets"
+    value     = join(",", [for s in aws_subnet.public : s.id])
+  }
+
+  # Security groups: instances and ALB
+  setting {
+    namespace = "aws:autoscaling:launchconfiguration"
+    name      = "SecurityGroups"
+    value     = aws_security_group.service_instance_sg.id
+  }
+
+  setting {
+    namespace = "aws:elbv2:loadbalancer"
+    name      = "SecurityGroups"
+    value     = aws_security_group.service_elb_sg.id
+  }
+
+  # Instance profile and type
+  setting {
+    namespace = "aws:autoscaling:launchconfiguration"
+    name      = "IamInstanceProfile"
+    value     = aws_iam_instance_profile.beanstalk_ec2_profile.name
+  }
+
+  setting {
+    namespace = "aws:autoscaling:launchconfiguration"
+    name      = "InstanceType"
+    value     = var.instance_type
+  }
+
+  # Use a custom ALB listener on port 5183 as requested
+  setting {
+    namespace = "aws:elbv2:listener:custom"
+    name      = "ListenerEnabled"
+    value     = "true"
+  }
+
+  setting {
+    namespace = "aws:elbv2:listener:custom"
+    name      = "Protocol"
+    value     = "HTTP"
+  }
+
+  setting {
+    namespace = "aws:elbv2:listener:custom"
+    name      = "Port"
+    value     = "5183"
+  }
+
+  # Target group defaults; ensure healthcheck path at '/'
+  setting {
+    namespace = "aws:elbv2:targetgroup:default"
+    name      = "HealthCheckPath"
+    value     = "/"
+  }
+
+  # Service role attachment
+  setting {
+    namespace = "aws:elasticbeanstalk:environment"
+    name      = "ServiceRole"
+    value     = aws_iam_role.beanstalk_service_role.name
+  }
+
+  # Ensure service binds to expected internal port 5183
+  setting {
+    namespace = "aws:elasticbeanstalk:application:environment"
+    name      = "PORT"
+    value     = "5183"
+  }
+
+  tags = merge(local.tags, { Role = "time-service" })
 }
