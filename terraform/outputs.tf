@@ -17,3 +17,8 @@ output "artifacts_bucket_name" {
   description = "Name of the S3 bucket storing application artifacts"
   value       = aws_s3_bucket.artifacts.bucket
 }
+
+output "webapp_cname" {
+  description = "CNAME of the webapp"
+  value       = aws_elastic_beanstalk_environment.asgardeo_environment.cname
+}

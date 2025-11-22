@@ -152,9 +152,9 @@ resource "aws_security_group" "service_instance_sg" {
   vpc_id      = aws_vpc.asgardeo_vpc.id
 
   ingress {
-    # ALB forwards to instance target port (default 80 on EB)
-    from_port       = 80
-    to_port         = 80
+    # ALB forwards to instance target port (set to 5183 via EB process config)
+    from_port       = 5183
+    to_port         = 5183
     protocol        = "tcp"
     security_groups = [aws_security_group.service_elb_sg.id]
   }
@@ -436,9 +436,21 @@ resource "aws_elastic_beanstalk_environment" "asgardeo_service_environment" {
     value     = "5183"
   }
 
-  # Target group defaults; ensure healthcheck path at '/'
+  # Define EB application process and health check (AL2023 v6)
   setting {
-    namespace = "aws:elbv2:targetgroup:default"
+    namespace = "aws:elasticbeanstalk:environment:process:default"
+    name      = "Port"
+    value     = "5183"
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:environment:process:default"
+    name      = "Protocol"
+    value     = "HTTP"
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:environment:process:default"
     name      = "HealthCheckPath"
     value     = "/"
   }

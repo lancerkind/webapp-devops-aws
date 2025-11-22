@@ -1,0 +1,15 @@
+{
+  "name": "asgardeo-time-service",
+  "version": "1.0.0",
+  "description": "Backend service that returns current date/time and a health endpoint",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "morgan": "^1.10.0"
+  },
+  "private": true
+}

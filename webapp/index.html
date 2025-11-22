@@ -14,6 +14,7 @@
     .meta { margin-top: 16px; font-size: 0.95rem; opacity: 0.85; }
     code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
     .ok { display: inline-block; background: #1f8a5a; color: #fff; padding: 6px 10px; border-radius: 999px; font-size: 0.85rem; }
+    .err { display: inline-block; background: #b3261e; color: #fff; padding: 6px 10px; border-radius: 999px; font-size: 0.85rem; }
     footer { text-align: center; padding: 24px; opacity: 0.6; }
   </style>
 </head>
@@ -27,8 +28,17 @@
       <p class="ok">Status: Healthy</p>
       <p>Welcome! This is a minimal static HTML app used to validate the CI/CD pipeline and infrastructure.</p>
       <div class="meta">
-        <p>Build: <span class="mono" id="build">v_from_infrastructure_</span></p>
+        <p>Build: <span class="mono" id="build">v0</span></p>
+        <p>Deployed on: <span class="mono" id="ts"></span></p>
       </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h2 style="margin-top:0;">Current Time</h2>
+      <p>Service URL: <span class="mono" id="svc"></span></p>
+      <p>Time from service: <span class="mono" id="time">loading…</span></p>
+      <button id="refreshBtn" style="margin-top:8px;">Refresh</button>
+      <p id="error" style="display:none;"><span class="err">service unavailable</span></p>
     </div>
   </main>
   <footer>
@@ -37,6 +47,39 @@
   <script>
     const d = new Date();
     document.getElementById('year').textContent = d.getFullYear();
+    document.getElementById('ts').textContent = d.toISOString();
+
+    async function loadConfig() {
+      const res = await fetch('/config');
+      if (!res.ok) throw new Error('Failed to load config');
+      return res.json();
+    }
+
+    async function fetchTime(baseUrl) {
+      const r = await fetch(`${baseUrl.replace(/\/$/, '')}/api/time`);
+      if (!r.ok) throw new Error('Service error');
+      return r.json();
+    }
+
+    async function renderTime() {
+      const timeEl = document.getElementById('time');
+      const errEl = document.getElementById('error');
+      const svcEl = document.getElementById('svc');
+      try {
+        errEl.style.display = 'none';
+        timeEl.textContent = 'loading…';
+        const cfg = await loadConfig();
+        svcEl.textContent = cfg.serviceUrl;
+        const data = await fetchTime(cfg.serviceUrl);
+        timeEl.textContent = data.now || JSON.stringify(data);
+      } catch (e) {
+        errEl.style.display = 'block';
+        timeEl.textContent = '';
+      }
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', renderTime);
+    renderTime();
   </script>
 </body>
 </html>

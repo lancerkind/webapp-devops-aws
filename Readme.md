@@ -151,14 +151,14 @@ You'll need to install these dependencies to test using your local environment:
 - Ensure all AWS resources are removed to avoid charges
 - S3 bucket with application versions may need manual cleanup
 
-### Note about the web app package
+### Note about the webapp and service package
 This setup requires .zip file containing a NodeJS application:
 - no parent directory
 - package.json with a "start" script
   DON'T PUT FILES INTO A SUBDIRECTORY OF THE ROOT DIRECTORY or Elastic Beanstalk will not find the start script.
 
 ## Test Sample Application
-Include a minimal NodeJS and an "index.html` for initial testing:
+A minimal NodeJS application and service are in the repo for local testing.  
 
 ## Test Terraform works independent of Git
 Prerequisites:
@@ -166,12 +166,15 @@ Prerequisites:
 - AWS credentials in your environment (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION)
 
 Steps:
-1. zip files in webapp directory and put in parent directory (don't put web app files into a subdirectory or elastic beanstalk won't start the app):
-    2. (get rid of old webapp.zip if there is one) rm webapp.zip
+1. Manually create webapp.zip and service.zip in the repo root from directories webapp and service. (The zipped files must be in the root of the zip.  If they are zipped into a subdirectory, elastic beanstalk won't start the app because it can't find package.json.):
+    2. (get rid of old zip packages if there are any) rm webapp.zip service.zip
     3. cd webapp /
     3. zip -r ../webapp.zip *
+    4. cd ../service /
+    5. zip -r ../service.zip *
 2. cd to terraform directory
 3. terraform init/plan/apply
+   4. the plan will ask you for a sha (make up a random string) for the application version.  (In a git environment, it will use the git commit sha.)
 4. go to the url displayed in the terraform output to see app working
 5. terraform destroy
 
