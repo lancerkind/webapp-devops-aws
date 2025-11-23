@@ -125,12 +125,15 @@ resource "aws_security_group" "webapp_sg" {
 # Service Load Balancer SG (internal; allow only from webapp SG)
 resource "aws_security_group" "service_elb_sg" {
   name        = "${local.name_prefix}-service-elb-sg"
-  description = "Internal ALB for time-service; allow from webapp SG on 5183"
+  description = "Internal LB for time-service; allow from webapp SG on port 80"
   vpc_id      = aws_vpc.asgardeo_vpc.id
 
   ingress {
-    from_port       = 5183
-    to_port         = 5183
+    # Elastic Beanstalk load balancers (Classic/ALB) listen on port 80 by default
+    # and forward to the instance's nginx on port 80, which then proxies to the app port.
+    # Allow the webapp SG to reach the service LB on port 80.
+    from_port       = 80
+    to_port         = 80
     protocol        = "tcp"
     security_groups = [aws_security_group.webapp_sg.id]
   }
@@ -145,16 +148,16 @@ resource "aws_security_group" "service_elb_sg" {
   tags = merge(local.tags, { Name = "${local.name_prefix}-service-elb-sg" })
 }
 
-# Service Instance SG (allow only from its ALB on 5183)
+# Service Instance SG (allow only from its LB on port 80)
 resource "aws_security_group" "service_instance_sg" {
   name        = "${local.name_prefix}-service-instance-sg"
-  description = "Allow traffic from service ALB on 5183"
+  description = "Allow traffic from service LB on port 80 (nginx)"
   vpc_id      = aws_vpc.asgardeo_vpc.id
 
   ingress {
-    # ALB forwards to instance target port (set to 5183 via EB process config)
-    from_port       = 5183
-    to_port         = 5183
+    # The load balancer forwards to instance port 80 (nginx), which then proxies to the app port.
+    from_port       = 80
+    to_port         = 80
     protocol        = "tcp"
     security_groups = [aws_security_group.service_elb_sg.id]
   }
@@ -338,7 +341,8 @@ resource "aws_elastic_beanstalk_environment" "asgardeo_environment" {
   setting {
     namespace = "aws:elasticbeanstalk:application:environment"
     name      = "SERVICE_URL"
-    value     = "http://${aws_elastic_beanstalk_environment.asgardeo_service_environment.cname}:5183"
+    # Use HTTP on default port 80; EB LB listens on 80 and proxies to app port internally
+    value     = "http://${aws_elastic_beanstalk_environment.asgardeo_service_environment.cname}"
   }
 
   # Ensure app binds to expected internal port 5173 (EB proxy forwards from 80)
@@ -365,7 +369,7 @@ resource "aws_elastic_beanstalk_environment" "asgardeo_service_environment" {
     value     = "LoadBalanced"
   }
 
-  # Internal ALB scheme for private access within VPC
+  # Ensure the Application Load Balancer is internal (private within the VPC)
   setting {
     namespace = "aws:elbv2:loadbalancer"
     name      = "Scheme"
@@ -417,24 +421,7 @@ resource "aws_elastic_beanstalk_environment" "asgardeo_service_environment" {
     value     = var.instance_type
   }
 
-  # Use a custom ALB listener on port 5183 as requested
-  setting {
-    namespace = "aws:elbv2:listener:custom"
-    name      = "ListenerEnabled"
-    value     = "true"
-  }
-
-  setting {
-    namespace = "aws:elbv2:listener:custom"
-    name      = "Protocol"
-    value     = "HTTP"
-  }
-
-  setting {
-    namespace = "aws:elbv2:listener:custom"
-    name      = "Port"
-    value     = "5183"
-  }
+  # Use default load balancer listener on port 80. Nginx on instances will proxy to app port.
 
   # Define EB application process and health check (AL2023 v6)
   setting {

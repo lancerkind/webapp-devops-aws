@@ -29,7 +29,6 @@
       <p>Welcome! This is a minimal static HTML app used to validate the CI/CD pipeline and infrastructure.</p>
       <div class="meta">
         <p>Build: <span class="mono" id="build">v0</span></p>
-        <p>Deployed on: <span class="mono" id="ts"></span></p>
       </div>
     </div>
 
@@ -47,16 +46,10 @@
   <script>
     const d = new Date();
     document.getElementById('year').textContent = d.getFullYear();
-    document.getElementById('ts').textContent = d.toISOString();
 
-    async function loadConfig() {
-      const res = await fetch('/config');
-      if (!res.ok) throw new Error('Failed to load config');
-      return res.json();
-    }
-
-    async function fetchTime(baseUrl) {
-      const r = await fetch(`${baseUrl.replace(/\/$/, '')}/api/time`);
+    async function fetchTime() {
+      // Call the server-side proxy on the same origin to reach the service.
+      const r = await fetch('/api/time');
       if (!r.ok) throw new Error('Service error');
       return r.json();
     }
@@ -68,9 +61,20 @@
       try {
         errEl.style.display = 'none';
         timeEl.textContent = 'loading…';
-        const cfg = await loadConfig();
-        svcEl.textContent = cfg.serviceUrl;
-        const data = await fetchTime(cfg.serviceUrl);
+        // For display purposes, we can optionally fetch config to show the backend target,
+        // but the browser will always call the local proxy at /api/time.
+        try {
+          const cfgRes = await fetch('/config');
+          if (cfgRes.ok) {
+            const cfg = await cfgRes.json();
+            svcEl.textContent = `via proxy → ${cfg.serviceUrl}/api/time`;
+          } else {
+            svcEl.textContent = 'via proxy → (config unavailable)';
+          }
+        } catch (_) {
+          svcEl.textContent = 'via proxy → (config unavailable)';
+        }
+        const data = await fetchTime();
         timeEl.textContent = data.now || JSON.stringify(data);
       } catch (e) {
         errEl.style.display = 'block';
