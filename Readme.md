@@ -323,7 +323,7 @@ Another option is to run the following to see if the Lock table is active. It wi
 - In terminal A: `terraform apply -auto-approve`
 - While it runs, in terminal B: `terraform plan` → you should see an "Error acquiring the state lock" message (expected). Stop terminal B. When A finishes, the lock should be released.
 
-###### WARNING: Only do this if you truly want to delete the backend and its data.
+###### WARNING: Only do this if you truly want to delete the terraform backend and its data.
 Eventually, you may want to get ride of the terraform state when you're finished trying out this infrastructure.
 ```
 aws s3 rm s3://$BUCKET --recursive
@@ -358,7 +358,8 @@ the infrastructure should be updated.
 1. **Trigger Infrastructure Deployment**: Trigger infrastructure deployment workflow when there is a code change
 
 ### Setup and test GitHub Actions for Infrastructure Repository and Webapp Repository
-A workflow is provided to run the same test using your AWS credentials and region.  This will suss out environmental 
+A workflow is provided to run the same test using your AWS credentials and region.  Because github will be running as a 
+different role than your usual administrator account, we need to test to suss out environmental 
 problems such as IAM permissions, GitHub secrets, etc. Once that works, we'll move on to getting the repository dispatch 
 workflow working. 
 
@@ -387,13 +388,6 @@ create an access key for the user, as explained in the next section.
 - `TF_STATE_BUCKET` = asgardeo-dev-<AWS account ID>-tfstate
 - `TF_LOCK_TABLE` = terraform-locks
 
-XXX> stopped here: next steps 
-~~Add the additional secrets,
-change the gitactions to do the below.~~
-- testing manual workflow dispatch
-- update all the calls to terraform in test_deploy.sh to use the same backend config: terraform -chdir="${TF_DIR}" init "${INIT_FLAGS[@]}" 1>/dev/null
-XXXX
-
 In the workflow step that runs `terraform init`, pass the same backend flags:
 ```
 terraform init \
@@ -404,7 +398,6 @@ terraform init \
 -backend-config="encrypt=true" \
 -reconfigure
 ```
-XXXX
 
 ###### Steps to setup a user for GitHub Actions
 We'll need to do the following steps to create a secure user for GitHub Actions to use:
