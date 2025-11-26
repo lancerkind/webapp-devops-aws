@@ -336,7 +336,7 @@ resource "aws_elastic_beanstalk_environment" "asgardeo_environment" {
     value     = aws_iam_role.beanstalk_service_role.name
   }
 
-  # Inject SERVICE_URL pointing to the internal ALB DNS of the service environment on port 5183
+  # Inject SERVICE_URL pointing to the internal ALB DNS of the service environment
   # Will be populated after service env is created/updated; Terraform will handle ordering via implicit reference
   setting {
     namespace = "aws:elasticbeanstalk:application:environment"
