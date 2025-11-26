@@ -1,4 +1,4 @@
-name: Deploy from Webapp Update
+name: Deploy upon Webapp update
 
 on:
   repository_dispatch:
@@ -17,6 +17,7 @@ env:
   AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
   APP_NAME: asgardeo-webapp-demo
   ENV_NAME: asgardeo-webapp-demo-env
+  NODE_VERSION: '22'
 
 jobs:
   deploy:
@@ -64,29 +65,73 @@ jobs:
         run: |
           echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Package webapp
+      - name: Detect webapp path
+        id: detect_webapp_path
+        shell: bash
         run: |
-          cd webapp-source/webapp
-          rm -f ../../webapp.zip
-          # Package without parent directory (EB requirement)
-          zip -r ../../webapp.zip * -x "*.git*" -x "node_modules/*" -x ".github/*" -x "*.md"
-          cd ../..
-          ls -lh webapp.zip
-          echo "Packaged webapp from SHA: ${{ steps.resolved_sha.outputs.sha }}"
-
-      - name: Package service
-        run: |
-          if [ ! -d "webapp-source/service" ]; then
-            echo "service directory not found in the external webapp repository" 1>&2
+          if [ -f "webapp-source/webapp/package.json" ]; then
+            echo "webapp_path=webapp-source/webapp" >> $GITHUB_OUTPUT
+          else
+            echo "Could not find package.json in expected locations (webapp-source/ or webapp-source/webapp)." 1>&2
+            ls -la webapp-source || true
             exit 1
           fi
-          cd webapp-source/service
-          rm -f ../../service.zip
-          # Package without parent directory
-          zip -r ../../service.zip * -x "*.git*" -x "node_modules/*" -x ".github/*" -x "*.md"
-          cd ../..
-          ls -lh service.zip
-          echo "Packaged service from SHA: ${{ steps.resolved_sha.outputs.sha }}"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ steps.detect_webapp_path.outputs.webapp_path }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ${{ steps.detect_webapp_path.outputs.webapp_path }}
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Build Vite webapp
+        working-directory: ${{ steps.detect_webapp_path.outputs.webapp_path }}
+        env:
+          NODE_OPTIONS: --max_old_space_size=4096
+        run: |
+          if npm run | grep -q " build"; then
+            npm run build
+          else
+            echo "No build script found in package.json" 1>&2
+            cat package.json
+            exit 1
+          fi
+
+      - name: Package built webapp (dist -> webapp.zip)
+        run: |
+          DIST_DIR="${{ steps.detect_webapp_path.outputs.webapp_path }}/dist"
+          if [ ! -d "$DIST_DIR" ]; then
+            echo "Build output directory 'dist' not found at $DIST_DIR" 1>&2
+            exit 1
+          fi
+          rm -f webapp.zip
+          # Package the contents of dist at the archive root (EB requirement)
+          (cd "$DIST_DIR" && zip -r ../../../webapp.zip .)
+          ls -lh webapp.zip
+          echo "Packaged webapp (Vite build) from SHA: ${{ steps.resolved_sha.outputs.sha }}"
+
+      - name: Package service (optional)
+        run: |
+          if [ -d "webapp-source/service" ]; then
+            cd webapp-source/service
+            rm -f ../../service.zip
+            # Package without parent directory
+            zip -r ../../service.zip * -x "*.git*" -x "node_modules/*" -x ".github/*" -x "*.md"
+            cd ../..
+            ls -lh service.zip
+            echo "Packaged service from SHA: ${{ steps.resolved_sha.outputs.sha }}"
+          else
+            echo "No service directory found in the external webapp repository. Skipping service packaging."
+          fi
 
       - name: Terraform Init (S3 backend)
         working-directory: ./terraform

@@ -1,4 +1,5 @@
-name: Deploy to AWS Elastic Beanstalk
+name: Test deploy test app&service to AWS Elastic Beanstalk
+# Useful to test that terraform can work with it's github user and IAM permissions.
 
 on:
   push:
