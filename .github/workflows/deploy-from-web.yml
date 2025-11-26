@@ -117,14 +117,9 @@ jobs:
           fi
 
           # For beanstalk to work with Vite, a server.js and package.json are copied to the dist directory.
-          if [ -f "$WEBAPP_ROOT/server/server.js" ] && [ -f "$WEBAPP_ROOT/server/package.json" ]; then
-            cp "$WEBAPP_ROOT/server.js" "$DIST_DIR/"
-            cp "$WEBAPP_ROOT/package.json" "$DIST_DIR/"
-          else
-            echo "Error: $WEBAPP_ROOT/server/server.js and/or it's package.json not found." 1>&2
-            exit 1
-          fi
-
+          cp "$WEBAPP_ROOT/server/server.js" "$DIST_DIR/"
+          cp "$WEBAPP_ROOT/server/package.json" "$DIST_DIR/"
+          
           rm -f webapp.zip
           
           # 3. Package the contents of dist (now including server.js and package.json)
