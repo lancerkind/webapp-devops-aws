@@ -35,6 +35,12 @@ app.get('/healthz', (req, res) => {
   res.status(200).send('OK');
 });
 
+// For any other request, send the index.html (SPA support)
+const path = require('path');
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

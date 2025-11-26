@@ -108,16 +108,29 @@ jobs:
 
       - name: Package built webapp (dist -> webapp.zip)
         run: |
-          DIST_DIR="${{ steps.detect_webapp_path.outputs.webapp_path }}/dist"
+          WEBAPP_ROOT="${{ steps.detect_webapp_path.outputs.webapp_path }}"
+          DIST_DIR="$WEBAPP_ROOT/dist"
+          
           if [ ! -d "$DIST_DIR" ]; then
             echo "Build output directory 'dist' not found at $DIST_DIR" 1>&2
             exit 1
           fi
+
+          # For beanstalk to work with Vite, a server.js and package.json are copied to the dist directory.
+          if [ -f "$WEBAPP_ROOT/server" ]; then
+            cp "$WEBAPP_ROOT/server.js" "$DIST_DIR/"
+            cp "$WEBAPP_ROOT/package.json" "$DIST_DIR/"
+          else
+            echo "Error: $WEBAPP_ROOT/server not found." 1>&2
+            exit 1
+          fi
+
           rm -f webapp.zip
-          # Package the contents of dist at the archive root (EB requirement)
+          
+          # 3. Package the contents of dist (now including server.js and package.json)
           (cd "$DIST_DIR" && zip -r ../../../webapp.zip .)
           ls -lh webapp.zip
-          echo "Packaged webapp (Vite build) from SHA: ${{ steps.resolved_sha.outputs.sha }}"
+          echo "Packaged webapp (Vite build + server.js) from SHA: ${{ steps.resolved_sha.outputs.sha }}"
 
       - name: Package service (optional)
         run: |
