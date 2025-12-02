@@ -369,6 +369,7 @@ workflow working.
     - AWS_ACCESS_KEY_ID
     - AWS_SECRET_ACCESS_KEY
     - (Optional) AWS_REGION if not provided as an input
+    - TF_SSH_PUBLIC_KEY  ← used to inject your SSH public key into Terraform
 
 How to run:
 1. Push this repository to GitHub and configure the secrets above.
@@ -387,6 +388,23 @@ create an access key for the user, as explained in the next section.
 - `AWS_ACCOUNT_ID`: <AWS account ID>
 - `TF_STATE_BUCKET` = asgardeo-dev-<AWS account ID>-tfstate
 - `TF_LOCK_TABLE` = terraform-locks
+- `TF_SSH_PUBLIC_KEY`: Your SSH public key string (single line), used to create an EC2 key pair for SSH access
+
+Exact steps to add the SSH key secret (copy/paste):
+- Name: `TF_SSH_PUBLIC_KEY`
+- Value: paste your public key contents. It should look like a single line starting with `ssh-ed25519` or `ssh-rsa` and ending with your email/comment.
+
+How to get your public key value:
+- macOS/Linux (ed25519 recommended):
+  - `cat ~/.ssh/id_ed25519.pub`
+  - macOS copy to clipboard: `pbcopy < ~/.ssh/id_ed25519.pub`
+- If you used RSA: `cat ~/.ssh/id_rsa.pub`
+- If you don’t have a key yet, create one (ed25519):
+  ```bash
+  ssh-keygen -t ed25519 -C "your_email@example.com"
+  # Press Enter to accept defaults, then:
+  cat ~/.ssh/id_ed25519.pub
+  ```
 
 In the workflow step that runs `terraform init`, pass the same backend flags:
 ```
@@ -398,6 +416,117 @@ terraform init \
 -backend-config="encrypt=true" \
 -reconfigure
 ```
+
+#### Passing your SSH key to Terraform (CI and local)
+Terraform variable: `ssh_public_key` (type string). This is used to create an AWS EC2 key pair and attach it to the Elastic Beanstalk instances. In CI, all workflows already export `TF_VAR_ssh_public_key: ${{ secrets.TF_SSH_PUBLIC_KEY }}` so no manual `-var` flags are needed.
+
+#### Generate an SSH keypair and visually confirm your public key
+If you don’t already have an SSH keypair, generate one and verify where the public key file is located.
+
+- macOS/Linux (recommended: ed25519):
+  ```bash
+  # Generate a keypair (accept defaults to save in ~/.ssh)
+  ssh-keygen -t ed25519 -f "asgardeo_demo"
+  
+  # List the .ssh directory so you can see both files
+  ls -la ~/.ssh
+  
+  # Examine the public key contents (what you will copy to GitHub Secret)
+  cat ~/.ssh/asgardeo_demo.pub
+  ```
+  Expected files in `~/.ssh`:
+  - `asgardeo_demo` → private key (keep secret, do not share)
+  - `asgardeo_demo.pub` → public key (safe to share; this is what Terraform needs)
+
+Security reminders:
+- Never upload or commit your private key (`asgardeo_demo`). Only the `.pub` file is used in Terraform/GitHub Secrets.
+- Consider a passphrase when generating the key for additional protection.
+
+For local runs, either export the environment variable or pass `-var`:
+- Using env var (recommended):
+  ```bash
+  export TF_VAR_ssh_public_key="$(cat ~/.ssh/asgardeo_demo.pub)"
+  ```
+- Or pass explicitly:
+  ```bash
+  terraform -chdir=terraform plan -var "ssh_public_key=$(cat ~/.ssh/asgardeo_demo.pub)" -var "commit_sha=$(git rev-parse HEAD)"
+  ```
+
+Note: The private key (e.g., `~/.ssh/asgardeo_demo`) stays on your machine. Only the public key is shared with Terraform.
+
+#### Running Terraform from the command line (locally)
+Prereqs: AWS credentials configured in your shell and remote backend info set.
+
+1) Set backend env vars used in examples below:
+```bash
+export TF_STATE_BUCKET="asgardeo-dev-<YOUR_AWS_ACCOUNT_ID>-tfstate"
+export TF_LOCK_TABLE="terraform-locks"
+export AWS_REGION="us-east-1"
+```
+
+2) Set Terraform variables via env (preferred):
+```bash
+export TF_VAR_commit_sha="$(git rev-parse HEAD)"   # any identifying string works
+export TF_VAR_ssh_public_key="$(cat ~/.ssh/asgardeo_demo.pub)"
+```
+
+3) Init/plan/apply:
+```bash
+terraform -chdir=terraform init \
+  -backend-config="bucket=${TF_STATE_BUCKET}" \
+  -backend-config="key=global/terraform.tfstate" \
+  -backend-config="region=${AWS_REGION}" \
+  -backend-config="dynamodb_table=${TF_LOCK_TABLE}" \
+  -backend-config="encrypt=true"
+
+terraform -chdir=terraform plan -input=false -out=tfplan
+terraform -chdir=terraform apply -input=false -auto-approve tfplan
+```
+
+#### Running scripts/test_deploy.sh locally
+This script provisions with Terraform, waits for the environment to become healthy, then destroys by default.
+
+Required env vars:
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (and `AWS_REGION`)
+- `TF_STATE_BUCKET`, `TF_LOCK_TABLE` (remote backend)
+- `TF_VAR_commit_sha` (string; used to version artifacts and EB app versions)
+- `TF_VAR_ssh_public_key` (your SSH public key string)
+
+Optional env vars:
+- `SKIP_DESTROY=1` to keep resources for inspection (default is destroy)
+- `MAX_WAIT_SECONDS` (default 900), `SLEEP_SECONDS` (default 20)
+
+Example:
+```bash
+export AWS_REGION=us-east-1
+export TF_STATE_BUCKET="asgardeo-dev-<YOUR_AWS_ACCOUNT_ID>-tfstate"
+export TF_LOCK_TABLE="terraform-locks"
+export TF_VAR_commit_sha="$(git rev-parse HEAD)"
+export TF_VAR_ssh_public_key="$(cat ~/.ssh/asgardeo_demo.pub)"
+
+SKIP_DESTROY=1 bash scripts/test_deploy.sh
+```
+
+### SSH access to the Elastic Beanstalk instance
+Once the environment is up, you can SSH into the EC2 instance using the private key that matches the public key you provided.
+
+1) Find the instance public IP:
+- AWS Console: EC2 → Instances → filter by tag `elasticbeanstalk:environment-name = asgardeo-webapp-demo-env`.
+- Or CLI:
+  ```bash
+  aws ec2 describe-instances \
+    --filters "Name=tag:elasticbeanstalk:environment-name,Values=asgardeo-webapp-demo-env" \
+              "Name=instance-state-name,Values=running" \
+    --query "Reservations[].Instances[].PublicIpAddress" \
+    --output text
+  ```
+
+2) SSH into the instance (Amazon Linux 2023 default user is `ec2-user`):
+```bash
+ssh -i ~/.ssh/asgardeo_demo ec2-user@<instance-public-ip>
+```
+
+Security note: For this POC, port 22 is open to `0.0.0.0/0`. For production, restrict the SSH security group ingress to your office/home IP CIDR.
 
 ###### Steps to setup a user for GitHub Actions
 We'll need to do the following steps to create a secure user for GitHub Actions to use:

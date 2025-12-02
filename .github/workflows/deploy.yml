@@ -15,6 +15,9 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      # Pass SSH public key to Terraform as variable `ssh_public_key`
+      TF_VAR_ssh_public_key: ${{ secrets.TF_SSH_PUBLIC_KEY }}
 
     steps:
       - name: Checkout repository

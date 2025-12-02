@@ -31,6 +31,14 @@ locals {
   name_prefix          = "asgardeo"
 }
 
+# SSH key pair to access EC2 instances
+resource "aws_key_pair" "webapp_ssh" {
+  key_name   = "${local.name_prefix}-webapp-ssh"
+  public_key = var.ssh_public_key
+
+  tags = merge(local.tags, { Name = "${local.name_prefix}-webapp-ssh" })
+}
+
 # Notes on Terraform syntax:
 #resource "<resource_type>" "<local_name>" {
 #  <configuration arguments>
@@ -108,6 +116,14 @@ resource "aws_security_group" "webapp_sg" {
   ingress {
     from_port   = 80
     to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # Allow SSH access for debugging/administration
+  ingress {
+    from_port   = 22
+    to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -297,6 +313,13 @@ resource "aws_elastic_beanstalk_environment" "asgardeo_environment" {
     namespace = "aws:autoscaling:launchconfiguration"
     name      = "IamInstanceProfile"
     value     = aws_iam_instance_profile.beanstalk_ec2_profile.name
+  }
+
+  # Attach EC2 key pair for SSH access
+  setting {
+    namespace = "aws:autoscaling:launchconfiguration"
+    name      = "EC2KeyName"
+    value     = aws_key_pair.webapp_ssh.key_name
   }
 
   setting {

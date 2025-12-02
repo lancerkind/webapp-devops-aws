@@ -39,3 +39,8 @@ variable "commit_sha" {
   description = "Commit SHA used to version the application artifact and EB Application Version"
   type        = string
 }
+
+variable "ssh_public_key" {
+  description = "Public SSH key string to register in AWS and attach to the webapp EC2 instances"
+  type        = string
+}
