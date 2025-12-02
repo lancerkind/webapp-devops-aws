@@ -629,7 +629,11 @@ Note: The policy below could be scoped to more specific resources through the us
         "ec2:TerminateInstances",
         "ec2:RunInstances",
         "ec2:CreateLaunchTemplate",
-        "ec2:DeleteLaunchTemplate"
+        "ec2:DeleteLaunchTemplate",
+        "ec2:CreateKeyPair",
+        "ec2:DeleteKeyPair",
+        "ec2:DescribeKeyPairs",
+         "ec2:ImportKeyPair"
       ],
       "Resource": "*"
     },

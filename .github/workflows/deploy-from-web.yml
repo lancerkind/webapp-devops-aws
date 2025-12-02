@@ -102,7 +102,7 @@ jobs:
           NODE_OPTIONS: --max_old_space_size=4096
         run: |
           if npm run | grep -q " build"; then
-            npm run build
+            VITE_BUILD_ID="$(date -u +%Y-%m-%dT%H:%M:%SZ)" npm run build
           else
             echo "No build script found in package.json" 1>&2
             cat package.json
