@@ -55,7 +55,7 @@ GitHub repository.  That's a little complicated so to make it easier, we'll brea
 
 # Step 1: Get Terraform working with your AWS account
 ## Terraform Infrastructure Components
-You'll need to install these dependencies to test using your local environment:
+You'll need to install these dependencies to test terraform by executing from your local environment:
 - Terraform CLI
 - AWS CLI (Optional: Terraform will use AWS CLI's credential configuration files in your user directory, or you'll need to environmental variables mentioned in next bullet)
 - AWS credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION)
